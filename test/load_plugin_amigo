@@ -1,0 +1,3 @@
+#! /bin/bash
+LIBPATH=~/ros/hydro/dev/devel/lib/libed_localization_plugin.so
+rosservice call /ed/load_plugin "{plugin_name: 'ed_localization_plugin', library_path: '$LIBPATH', configuration: '{laser_topic: /amigo/base_front_laser }' }" 
