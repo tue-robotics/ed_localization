@@ -131,9 +131,9 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         lrf_.setAngleLimits(last_laser_msg_->angle_min, last_laser_msg_->angle_max);
     }
 
-    std::vector<double> ranges_in(last_laser_msg_->ranges.size());
+    std::vector<double> sensor_ranges(last_laser_msg_->ranges.size());
     for (unsigned int i = 0; i < last_laser_msg_->ranges.size(); ++i)
-        ranges_in[i] = last_laser_msg_->ranges[i];
+        sensor_ranges[i] = last_laser_msg_->ranges[i];
 
     std::vector<ed::EntityConstPtr> entities;
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
@@ -146,11 +146,11 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     laser_pose.t = laser_pose_.t + geo::Vector3(0, 0, 0);
     laser_pose.R.setRPY(0, 0, 0);
 
-    std::vector<double> ranges_out;
+    std::vector<double> model_ranges;
     for(std::vector<ed::EntityConstPtr>::const_iterator it = entities.begin(); it != entities.end(); ++it)
     {
         const ed::EntityConstPtr& e = *it;
-        lrf_.render(*e->shape(), laser_pose, e->pose(), ranges_out);
+        lrf_.render(*e->shape(), laser_pose, e->pose(), model_ranges);
     }
 
     double max_dist = 0.3;
@@ -160,13 +160,13 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
     cv::Mat distance_map(800, 800, CV_32FC1, (max_dist / res) * (max_dist / res));
 
-    std::vector<geo::Vector3> points;
-    lrf_.rangesToPoints(ranges_out, points);
+    std::vector<geo::Vector3> model_points;
+    lrf_.rangesToPoints(model_ranges, model_points);
 
     std::queue<CellData> Q;
-    for(unsigned int i = 0; i < points.size(); ++i)
+    for(unsigned int i = 0; i < model_points.size(); ++i)
     {
-        const geo::Vector3& p = points[i];
+        const geo::Vector3& p = model_points[i];
         int x = -p.y / res + distance_map.cols / 2;
         int y = -p.x / res + distance_map.rows / 2;
 
@@ -206,10 +206,69 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         Q.pop();
     }
 
+    std::vector<geo::Vector3> sensor_points;
+    lrf_.rangesToPoints(sensor_ranges, sensor_points);
+
+    double min_sum_sq_error = 1e10;
+    geo::Pose3D best_laser_pose;
+
+    for(double x = -1; x < 1; x += 0.2)
+    {
+        for(double y = -1; y < 1; y += 0.2)
+        {
+            for(double a = 0; a < 6.28; a += 0.3)
+            {
+                geo::Pose3D laser_pose;
+                laser_pose.t = geo::Vector3(x, y, 0);
+                laser_pose.R.setRPY(0, 0, a);
+
+                double sum_sq_error = 0;
+                for(unsigned int i = 0; i < sensor_points.size(); ++i)
+                {
+                    const geo::Vector3& p = laser_pose * sensor_points[i];
+                    int mx = -p.y / res + distance_map.cols / 2;
+                    int my = -p.x / res + distance_map.rows / 2;
+                    sum_sq_error += distance_map.at<float>(my, mx);
+                }
+
+                if (sum_sq_error < min_sum_sq_error)
+                {
+                    min_sum_sq_error = sum_sq_error;
+                    best_laser_pose = laser_pose;
+                }
+            }
+        }
+    }
+
+    std::cout << min_sum_sq_error << std::endl;
+    std::cout << best_laser_pose << std::endl;
+
     std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
 
-    cv::imshow("distance_map", distance_map / ((max_dist / res) * (max_dist / res)));
-    cv::waitKey(1);
+    bool visualize = true;
+    if (visualize)
+    {
+        cv::Mat rgb_image(distance_map.rows, distance_map.cols, CV_8UC3, cv::Scalar(0, 0, 0));
+        for(int y = 0; y < rgb_image.rows; ++y)
+        {
+            for(int x = 0; x < rgb_image.cols; ++x)
+            {
+                int c = distance_map.at<float>(y, x) / ((max_dist / res) * (max_dist / res)) * 255;
+                rgb_image.at<cv::Vec3b>(y, x) = cv::Vec3b(c, c, c);
+            }
+        }
+
+        for(unsigned int i = 0; i < sensor_points.size(); ++i)
+        {
+            const geo::Vector3& p = best_laser_pose * sensor_points[i];
+            int mx = -p.y / res + distance_map.cols / 2;
+            int my = -p.x / res + distance_map.rows / 2;
+            rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
+        }
+
+        cv::imshow("distance_map", rgb_image);
+        cv::waitKey(1);
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------
