@@ -37,13 +37,13 @@ class CellData
 {
 public:
 
-  CellData(int index_, int dx_, int dy_, double distance_) :
+  CellData(int index_, int dx_, int dy_, int distance_) :
       index(index_), dx(dx_), dy(dy_), distance(distance_)
   {}
 
   int index;
   int dx, dy;
-  double distance;
+  int distance;
 
 };
 
@@ -120,6 +120,10 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     if (!last_laser_msg_)
         return;
 
+
+    tue::Timer timer;
+    timer.start();
+
     if (lrf_.getNumBeams() != last_laser_msg_->ranges.size())
     {
         lrf_.setNumBeams(last_laser_msg_->ranges.size());
@@ -151,8 +155,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
     double max_dist = 0.3;
 
-    tue::Timer timer;
-    timer.start();
 
     double res = 0.025;
 
@@ -184,28 +186,24 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     while(!Q.empty())
     {
         const CellData& c = Q.front();
-        int dx = c.dx;
-        int dy = c.dy;
-        int index = c.index;
-        double distance = c.distance;
-        Q.pop();
 
-        double current_distance = distance_map.at<float>(index);
-        if (distance < current_distance)
+        double current_distance = distance_map.at<float>(c.index);
+        if (c.distance < current_distance)
         {
-            distance_map.at<float>(index) = distance;
+            distance_map.at<float>(c.index) = c.distance;
             for(unsigned int i = 0; i < kernel.size(); ++i)
             {
                 const KernelCell& kc = kernel[i];
-                int new_index = index + kc.d_index;
-                int dx_new = dx + kc.dx;
-                int dy_new = dy + kc.dy;
+                int new_index = c.index + kc.d_index;
+                int dx_new = c.dx + kc.dx;
+                int dy_new = c.dy + kc.dy;
 
-//                double new_distance = distance + kc.ddistance;
-                double new_distance = (dx_new * dx_new) + (dy_new * dy_new);
+                int new_distance = (dx_new * dx_new) + (dy_new * dy_new);
                 Q.push(CellData(new_index, dx_new, dy_new, new_distance));
             }
         }
+
+        Q.pop();
     }
 
     std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
