@@ -4,6 +4,7 @@
 #include <ed/plugin.h>
 
 #include <geolib/datatypes.h>
+#include <geolib/sensors/LaserRangeFinder.h>
 
 // ROS
 #include <ros/subscriber.h>
@@ -33,6 +34,13 @@ public:
 private:
 
     std::vector<Sample> samples_;
+
+    // RENDERING
+
+    geo::LaserRangeFinder lrf_;
+
+    geo::Pose3D laser_pose_;
+    double a_current_;
 
     // ROS
 
