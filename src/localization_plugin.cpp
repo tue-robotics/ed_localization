@@ -158,7 +158,15 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
     double res = 0.025;
 
-    cv::Mat distance_map(800, 800, CV_32FC1, (max_dist / res) * (max_dist / res));
+    int grid_size = 800;
+    cv::Mat distance_map(grid_size, grid_size, CV_32FC1, (max_dist / res) * (max_dist / res));
+    for(int i = 0; i < grid_size; ++i)
+    {
+        distance_map.at<float>(i, 0) = 0;
+        distance_map.at<float>(i, distance_map.cols - 1) = 0;
+        distance_map.at<float>(0, i) = 0;
+        distance_map.at<float>(distance_map.cols - 1, i) = 0;
+    }
 
     std::vector<geo::Vector3> model_points;
     lrf_.rangesToPoints(model_ranges, model_points);
