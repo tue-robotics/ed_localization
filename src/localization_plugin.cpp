@@ -37,11 +37,11 @@ class CellData
 {
 public:
 
-  CellData(int x_, int y_, double distance_) :
-      x(x_), y(y_), distance(distance_)
+  CellData(int index_, double distance_) :
+      index(index_), distance(distance_)
   {}
 
-  unsigned int x, y;
+  int index;
   double distance;
 
 };
@@ -59,11 +59,11 @@ class KernelCell
 {
 public:
 
-    KernelCell(int dx_, int dy_, double d_dist_) :
-        dx(dx_), dy(dy_), ddistance(d_dist_)
+    KernelCell(int d_index_, double d_dist_) :
+        d_index(d_index_), ddistance(d_dist_)
     {}
 
-    int dx, dy;
+    int d_index;
     double ddistance;
 };
 
@@ -164,45 +164,47 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     for(unsigned int i = 0; i < points.size(); ++i)
     {
         const geo::Vector3& p = points[i];
-        double x = -p.y / res + distance_map.cols / 2;
-        double y = -p.x / res + distance_map.rows / 2;
+        int x = -p.y / res + distance_map.cols / 2;
+        int y = -p.x / res + distance_map.rows / 2;
 
         if (x >= 0 && y >= 0 && x < distance_map.cols && y < distance_map.rows) {
-            distance_map.at<float>(y, x) = 0;
-            Q.push(CellData(x, y, 0));
+            int index = y * distance_map.cols + x;
+            distance_map.at<float>(index) = 0;
+            Q.push(CellData(index, 0));
         }
     }
 
     std::vector<KernelCell> kernel;
 
-    kernel.push_back(KernelCell( 0, -1, res));
-    kernel.push_back(KernelCell( 0,  1, res));
-    kernel.push_back(KernelCell(-1, 0, res));
-    kernel.push_back(KernelCell( 1, 0, res));
+    kernel.push_back(KernelCell(-distance_map.cols, res));
+    kernel.push_back(KernelCell(distance_map.cols, res));
+    kernel.push_back(KernelCell(-1, res));
+    kernel.push_back(KernelCell( 1, res));
 
-    kernel.push_back(KernelCell(-1, -1, sqrt(2 * res * res)));
-    kernel.push_back(KernelCell( 1, -1, sqrt(2 * res * res)));
-    kernel.push_back(KernelCell(-1,  1, sqrt(2 * res * res)));
-    kernel.push_back(KernelCell(-1,  1, sqrt(2 * res * res)));
+    kernel.push_back(KernelCell(-1 - distance_map.cols, sqrt(2 * res * res)));
+    kernel.push_back(KernelCell( 1 - distance_map.cols, sqrt(2 * res * res)));
+    kernel.push_back(KernelCell(-1 + distance_map.cols, sqrt(2 * res * res)));
+    kernel.push_back(KernelCell(-1 + distance_map.cols, sqrt(2 * res * res)));
 
     while(!Q.empty())
     {
         const CellData& c = Q.top();
-        int mx = c.x;
-        int my = c.y;
+        int index = c.index;
         double distance = c.distance;
         Q.pop();
 
         for(unsigned int i = 0; i < kernel.size(); ++i)
         {
             const KernelCell& kc = kernel[i];
-            double old_distance = distance_map.at<float>(my + kc.dy, mx + kc.dx);
+
+            int new_index = index + kc.d_index;
+            double old_distance = distance_map.at<float>(new_index);
             double new_distance = distance + kc.ddistance;
 
             if (new_distance < old_distance)
             {
-                distance_map.at<float>(my + kc.dy, mx + kc.dx) = new_distance;
-                Q.push(CellData(mx + kc.dx, my + kc.dy, new_distance));
+                distance_map.at<float>(new_index) = new_distance;
+                Q.push(CellData(new_index, new_distance));
             }
         }
     }
