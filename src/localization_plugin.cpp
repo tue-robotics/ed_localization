@@ -37,12 +37,12 @@ class CellData
 {
 public:
 
-  CellData(int index_, int mx_, int my_, int mx_src_, int my_src_, double distance_) :
-      index(index_), mx(mx_), my(my_), mx_src(mx_src_), my_src(my_src_), distance(distance_)
+  CellData(int index_, int dx_, int dy_, double distance_) :
+      index(index_), dx(dx_), dy(dy_), distance(distance_)
   {}
 
   int index;
-  int mx, my, mx_src, my_src;
+  int dx, dy;
   double distance;
 
 };
@@ -60,13 +60,12 @@ class KernelCell
 {
 public:
 
-    KernelCell(int d_index_, int dx_, int dy_, double d_dist_) :
-        d_index(d_index_), dx(dx_), dy(dy_), ddistance(d_dist_)
+    KernelCell(int d_index_, int dx_, int dy_) :
+        d_index(d_index_), dx(dx_), dy(dy_)
     {}
 
     int d_index;
     int dx, dy;
-    double ddistance;
 };
 
 // ----------------------------------------------------------------------------------------------------
@@ -162,12 +161,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     std::vector<geo::Vector3> points;
     lrf_.rangesToPoints(ranges_out, points);
 
-
-//    points.clear();
-//    points.push_back(geo::Vector3(-0.1, 0, 0));
-//    points.push_back(geo::Vector3(0.1, 0, 0));
-
-    std::priority_queue<CellData> Q;
+    std::queue<CellData> Q;
     for(unsigned int i = 0; i < points.size(); ++i)
     {
         const geo::Vector3& p = points[i];
@@ -176,29 +170,22 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
         if (x >= 0 && y >= 0 && x < distance_map.cols && y < distance_map.rows) {
             int index = y * distance_map.cols + x;
-            Q.push(CellData(index, x, y, x, y, 0));
+            Q.push(CellData(index, 0, 0, 0));
         }
     }
 
     std::vector<KernelCell> kernel;
 
-    kernel.push_back(KernelCell(-distance_map.cols, 0, -1, res));
-    kernel.push_back(KernelCell(distance_map.cols, 0, 1, res));
-    kernel.push_back(KernelCell(-1, -1, 0, res));
-    kernel.push_back(KernelCell( 1,  1, 0, res));
-
-//    kernel.push_back(KernelCell(-1 - distance_map.cols, sqrt(2.0 * res * res)));
-//    kernel.push_back(KernelCell( 1 - distance_map.cols, sqrt(2.0 * res * res)));
-//    kernel.push_back(KernelCell(-1 + distance_map.cols, sqrt(2.0 * res * res)));
-//    kernel.push_back(KernelCell( 1 + distance_map.cols, sqrt(2.0 * res * res)));
+    kernel.push_back(KernelCell(-distance_map.cols, 0, -1));
+    kernel.push_back(KernelCell(distance_map.cols, 0, 1));
+    kernel.push_back(KernelCell(-1, -1, 0));
+    kernel.push_back(KernelCell( 1,  1, 0));
 
     while(!Q.empty())
     {
-        const CellData& c = Q.top();
-        int mx = c.mx;
-        int my = c.my;
-        int mx_src = c.mx_src;
-        int my_src = c.my_src;
+        const CellData& c = Q.front();
+        int dx = c.dx;
+        int dy = c.dy;
         int index = c.index;
         double distance = c.distance;
         Q.pop();
@@ -211,33 +198,20 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             {
                 const KernelCell& kc = kernel[i];
                 int new_index = index + kc.d_index;
-                int mx_new = mx + kc.dx;
-                int my_new = my + kc.dy;
-
-                int dx = mx_new - mx_src;
-                int dy = my_new - my_src;
+                int dx_new = dx + kc.dx;
+                int dy_new = dy + kc.dy;
 
 //                double new_distance = distance + kc.ddistance;
-                double new_distance = (dx * dx) + (dy * dy);
-                Q.push(CellData(new_index, mx_new, my_new, mx_src, my_src, new_distance));
+                double new_distance = (dx_new * dx_new) + (dy_new * dy_new);
+                Q.push(CellData(new_index, dx_new, dy_new, new_distance));
             }
         }
-
-//        std::cout << index << ": " << distance << std::endl;
-
     }
 
     std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
 
-    std::cout << distance_map.at<float>(distance_map.rows / 2, distance_map.cols / 2 + 4) << std::endl;
-
-
     cv::imshow("distance_map", distance_map / ((max_dist / res) * (max_dist / res)));
     cv::waitKey(1);
-
-
-
-
 }
 
 // ----------------------------------------------------------------------------------------------------
