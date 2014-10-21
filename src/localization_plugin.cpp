@@ -10,6 +10,9 @@
 
 #include <tue/profiling/timer.h>
 
+// Inflation
+#include <queue>
+
 // ----------------------------------------------------------------------------------------------------
 
 void drawLaserPoints(cv::Mat& img, const geo::LaserRangeFinder& lrf, const std::vector<double>& ranges, const cv::Vec3b& clr)
@@ -27,6 +30,42 @@ void drawLaserPoints(cv::Mat& img, const geo::LaserRangeFinder& lrf, const std::
         }
     }
 }
+
+// ----------------------------------------------------------------------------------------------------
+
+class CellData
+{
+public:
+
+  CellData(int x_, int y_, double distance_) :
+      x(x_), y(y_), distance(distance_)
+  {}
+
+  unsigned int x, y;
+  double distance;
+
+};
+
+// ----------------------------------------------------------------------------------------------------
+
+inline bool operator<(const CellData &a, const CellData &b)
+{
+  return a.distance > b.distance;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+class KernelCell
+{
+public:
+
+    KernelCell(int dx_, int dy_, double d_dist_) :
+        dx(dx_), dy(dy_), ddistance(d_dist_)
+    {}
+
+    int dx, dy;
+    double ddistance;
+};
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -91,8 +130,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     for (unsigned int i = 0; i < last_laser_msg_->ranges.size(); ++i)
         ranges_in[i] = last_laser_msg_->ranges[i];
 
-
-
     std::vector<ed::EntityConstPtr> entities;
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
@@ -100,70 +137,80 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             entities.push_back(it->second);
     }
 
-    double best_score = -1e10;
-    std::vector<double> best_ranges;
-    geo::Pose3D best_pose;
-    double a_best;
+    geo::Pose3D laser_pose;
+    laser_pose.t = laser_pose_.t + geo::Vector3(0, 0, 0);
+    laser_pose.R.setRPY(0, 0, 0);
 
-    int k = 0;
-    for(double x = -0.2; x < 0.2; x += 0.1)
+    std::vector<double> ranges_out;
+    for(std::vector<ed::EntityConstPtr>::const_iterator it = entities.begin(); it != entities.end(); ++it)
     {
-        for(double y = -0.2; y < 0.2; y += 0.1)
+        const ed::EntityConstPtr& e = *it;
+        lrf_.render(*e->shape(), laser_pose, e->pose(), ranges_out);
+    }
+
+    double max_dist = 0.3;
+
+    tue::Timer timer;
+    timer.start();
+
+    cv::Mat distance_map(800, 800, CV_32FC1, max_dist);
+
+    std::vector<geo::Vector3> points;
+    lrf_.rangesToPoints(ranges_out, points);
+
+    double res = 0.025;
+
+    std::priority_queue<CellData> Q;
+    for(unsigned int i = 0; i < points.size(); ++i)
+    {
+        const geo::Vector3& p = points[i];
+        double x = -p.y / res + distance_map.cols / 2;
+        double y = -p.x / res + distance_map.rows / 2;
+
+        if (x >= 0 && y >= 0 && x < distance_map.cols && y < distance_map.rows) {
+            distance_map.at<float>(y, x) = 0;
+            Q.push(CellData(x, y, 0));
+        }
+    }
+
+    std::vector<KernelCell> kernel;
+
+    kernel.push_back(KernelCell( 0, -1, res));
+    kernel.push_back(KernelCell( 0,  1, res));
+    kernel.push_back(KernelCell(-1, 0, res));
+    kernel.push_back(KernelCell( 1, 0, res));
+
+    kernel.push_back(KernelCell(-1, -1, sqrt(2 * res * res)));
+    kernel.push_back(KernelCell( 1, -1, sqrt(2 * res * res)));
+    kernel.push_back(KernelCell(-1,  1, sqrt(2 * res * res)));
+    kernel.push_back(KernelCell(-1,  1, sqrt(2 * res * res)));
+
+    while(!Q.empty())
+    {
+        const CellData& c = Q.top();
+        int mx = c.x;
+        int my = c.y;
+        double distance = c.distance;
+        Q.pop();
+
+        for(unsigned int i = 0; i < kernel.size(); ++i)
         {
-            for(double a = -0.2; a < 0.2; a += 0.1)
+            const KernelCell& kc = kernel[i];
+            double old_distance = distance_map.at<float>(my + kc.dy, mx + kc.dx);
+            double new_distance = distance + kc.ddistance;
+
+            if (new_distance < old_distance)
             {
-                ++k;
-
-                tue::Timer timer;
-                timer.start();
-
-                geo::Pose3D laser_pose;
-                laser_pose.t = laser_pose_.t + geo::Vector3(x, y, 0);
-                laser_pose.R.setRPY(0, 0, a_current_ + a);
-
-                std::vector<double> ranges_out;
-                for(std::vector<ed::EntityConstPtr>::const_iterator it = entities.begin(); it != entities.end(); ++it)
-                {
-                    const ed::EntityConstPtr& e = *it;
-                    lrf_.render(*e->shape(), laser_pose, e->pose(), ranges_out);
-                }
-
-                double score = 0;
-                for(unsigned int i = 0; i < ranges_in.size(); ++i)
-                {
-                    double diff = std::abs(ranges_in[i] - ranges_out[i]);
-                    diff = std::min(diff, 0.3);
-                    score -= (diff * diff);
-                }
-
-                if (score > best_score)
-                {
-                    best_score = score;
-                    best_ranges = ranges_out;
-                    best_pose = laser_pose;
-                    a_best = a_current_ + a;
-                }
-
-//                std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
-
+                distance_map.at<float>(my + kc.dy, mx + kc.dx) = new_distance;
+                Q.push(CellData(mx + kc.dx, my + kc.dy, new_distance));
             }
         }
     }
 
-    std::cout << k << " samples" << std::endl;
+    std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
 
-    laser_pose_ = best_pose;
-    a_current_ = a_best;
-
-    // Visualization
-    cv::Mat img(600, 600, CV_8UC3, cv::Scalar(30, 30, 30));
-    drawLaserPoints(img, lrf_, ranges_in, cv::Vec3b(255, 255, 255));
-    drawLaserPoints(img, lrf_, best_ranges, cv::Vec3b(0, 255, 0));
-
-    cv::imshow("laser", img);
+    cv::imshow("distance_map", distance_map / max_dist);
     cv::waitKey(3);
-
-
 }
 
 // ----------------------------------------------------------------------------------------------------
