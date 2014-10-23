@@ -33,6 +33,9 @@ public:
 
 private:
 
+
+    bool pose_initialized_;
+
     std::vector<Sample> samples_;
 
     // RENDERING

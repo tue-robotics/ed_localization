@@ -45,7 +45,8 @@ class LineRenderResult : public geo::LaserRangeFinder::RenderResult
 
 public:
 
-    LineRenderResult(std::queue<CellData>& Q, int grid_size, double res) : Q_(Q), grid_size_(grid_size), res_(res) {}
+    LineRenderResult(std::queue<CellData>& Q, int grid_size, double res) : Q_(Q), grid_size_(grid_size), res_(res),
+        p_min(1e9), p_max(-1e9) {}
 
     void renderLine(const geo::Vector3& p1, const geo::Vector3& p2)
     {
@@ -67,6 +68,12 @@ public:
             }
             p += vd;
         }
+
+        p_min.x = std::min(p_min.x, std::min(p1.x, p2.x));
+        p_max.x = std::max(p_max.x, std::max(p1.x, p2.x));
+
+        p_min.y = std::min(p_min.y, std::min(p1.y, p2.y));
+        p_max.y = std::max(p_max.y, std::max(p1.y, p2.y));
     }
 
 private:
@@ -74,6 +81,11 @@ private:
     std::queue<CellData>& Q_;
     int grid_size_;
     double res_;
+
+public:
+
+    bool empty;
+    geo::Vec2 p_min, p_max;
 
 };
 
@@ -111,7 +123,7 @@ public:
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationPlugin::LocalizationPlugin()
+LocalizationPlugin::LocalizationPlugin() : pose_initialized_(false)
 {
 }
 
@@ -191,6 +203,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     int grid_size = 800;
 
     std::queue<CellData> Q;
+    LineRenderResult render_result(Q, grid_size, grid_resolution);
 
     for(std::vector<ed::EntityConstPtr>::const_iterator it = entities.begin(); it != entities.end(); ++it)
     {
@@ -199,11 +212,10 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         geo::LaserRangeFinder::RenderOptions options;
         geo::Transform t_inv = laser_pose.inverse() * e->pose();
         options.setMesh(e->shape()->getMesh(), t_inv);
-
-        LineRenderResult resu(Q, grid_size, grid_resolution);
-
-        lrf_.render(options, resu);
+        lrf_.render(options, render_result);
     }
+
+    std::cout << render_result.p_min << " " << render_result.p_max << std::endl;
 
     double max_dist = 0.3;
 
@@ -267,9 +279,9 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     double min_sum_sq_error = 1e10;
     geo::Pose3D best_laser_pose;
 
-    for(double x = -1; x < 1; x += 0.2)
+    for(double x = render_result.p_min.x; x < render_result.p_max.x; x += 0.2)
     {
-        for(double y = -1; y < 1; y += 0.2)
+        for(double y = render_result.p_min.y; y < render_result.p_max.y; y += 0.2)
         {
             for(double a = 0; a < 6.28; a += 0.1)
             {
