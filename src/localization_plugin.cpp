@@ -10,26 +10,10 @@
 
 #include <tue/profiling/timer.h>
 
+#include <geolib/Shape.h>
+
 // Inflation
 #include <queue>
-
-// ----------------------------------------------------------------------------------------------------
-
-void drawLaserPoints(cv::Mat& img, const geo::LaserRangeFinder& lrf, const std::vector<double>& ranges, const cv::Vec3b& clr)
-{
-    std::vector<geo::Vector3> points;
-    if (lrf.rangesToPoints(ranges, points)) {
-        for(unsigned int i = 0; i < points.size(); ++i) {
-            const geo::Vector3& p = points[i];
-            double x = (-p.y * 25) + img.cols / 2;
-            double y = (-p.x * 25) + img.rows / 2;
-
-            if (x >= 0 && y >= 0 && x < img.cols && y < img.rows) {
-                img.at<cv::Vec3b>(y, x) = clr;
-            }
-        }
-    }
-}
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -52,6 +36,63 @@ public:
 inline bool operator<(const CellData &a, const CellData &b)
 {
   return a.distance > b.distance;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+class LineRenderResult : public geo::LaserRangeFinder::RenderResult
+{
+
+public:
+
+    LineRenderResult(std::queue<CellData>& Q, int grid_size, double res) : Q_(Q), grid_size_(grid_size), res_(res) {}
+
+    void renderLine(const geo::Vector3& p1, const geo::Vector3& p2)
+    {
+        geo::Vector3 v_diff = p2 - p1;
+        double n_diff = v_diff.length();
+
+        geo::Vector3 vd = v_diff / n_diff * res_;
+        int n = n_diff / res_ + 1;
+
+        geo::Vector3 p = p1;
+        for(int i = 0; i < n; ++i)
+        {
+            int x = -p.y / res_ + grid_size_ / 2;
+            int y = -p.x / res_ + grid_size_ / 2;
+
+            if (x >= 0 && y >= 0 && x < grid_size_ && y <grid_size_) {
+                int index = y * grid_size_ + x;
+                Q_.push(CellData(index, 0, 0, 0));
+            }
+            p += vd;
+        }
+    }
+
+private:
+
+    std::queue<CellData>& Q_;
+    int grid_size_;
+    double res_;
+
+};
+
+// ----------------------------------------------------------------------------------------------------
+
+void drawLaserPoints(cv::Mat& img, const geo::LaserRangeFinder& lrf, const std::vector<double>& ranges, const cv::Vec3b& clr)
+{
+    std::vector<geo::Vector3> points;
+    if (lrf.rangesToPoints(ranges, points)) {
+        for(unsigned int i = 0; i < points.size(); ++i) {
+            const geo::Vector3& p = points[i];
+            double x = (-p.y * 25) + img.cols / 2;
+            double y = (-p.x * 25) + img.rows / 2;
+
+            if (x >= 0 && y >= 0 && x < img.cols && y < img.rows) {
+                img.at<cv::Vec3b>(y, x) = clr;
+            }
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -146,43 +187,49 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     laser_pose.t = laser_pose_.t + geo::Vector3(0, 0, 0);
     laser_pose.R.setRPY(0, 0, 0);
 
-    std::vector<double> model_ranges;
+    double grid_resolution = 0.025;
+    int grid_size = 800;
+
+    std::queue<CellData> Q;
+
     for(std::vector<ed::EntityConstPtr>::const_iterator it = entities.begin(); it != entities.end(); ++it)
     {
         const ed::EntityConstPtr& e = *it;
-        lrf_.render(*e->shape(), laser_pose, e->pose(), model_ranges);
+
+        geo::LaserRangeFinder::RenderOptions options;
+        geo::Transform t_inv = laser_pose.inverse() * e->pose();
+        options.setMesh(e->shape()->getMesh(), t_inv);
+
+        LineRenderResult resu(Q, grid_size, grid_resolution);
+
+        lrf_.render(options, resu);
     }
 
     double max_dist = 0.3;
 
-
-    double res = 0.025;
-
-    int grid_size = 800;
-    cv::Mat distance_map(grid_size, grid_size, CV_32FC1, (max_dist / res) * (max_dist / res));
+    cv::Mat distance_map(grid_size, grid_size, CV_32FC1, (max_dist / grid_resolution) * (max_dist / grid_resolution));
     for(int i = 0; i < grid_size; ++i)
     {
         distance_map.at<float>(i, 0) = 0;
-        distance_map.at<float>(i, distance_map.cols - 1) = 0;
+        distance_map.at<float>(i, grid_size - 1) = 0;
         distance_map.at<float>(0, i) = 0;
-        distance_map.at<float>(distance_map.cols - 1, i) = 0;
+        distance_map.at<float>(grid_size - 1, i) = 0;
     }
 
-    std::vector<geo::Vector3> model_points;
-    lrf_.rangesToPoints(model_ranges, model_points);
+//    std::vector<geo::Vector3> model_points;
+//    lrf_.rangesToPoints(model_ranges, model_points);
 
-    std::queue<CellData> Q;
-    for(unsigned int i = 0; i < model_points.size(); ++i)
-    {
-        const geo::Vector3& p = model_points[i];
-        int x = -p.y / res + distance_map.cols / 2;
-        int y = -p.x / res + distance_map.rows / 2;
+//    for(unsigned int i = 0; i < model_points.size(); ++i)
+//    {
+//        const geo::Vector3& p = model_points[i];
+//        int x = -p.y / grid_resolution + grid_size / 2;
+//        int y = -p.x / grid_resolution + grid_size / 2;
 
-        if (x >= 0 && y >= 0 && x < distance_map.cols && y < distance_map.rows) {
-            int index = y * distance_map.cols + x;
-            Q.push(CellData(index, 0, 0, 0));
-        }
-    }
+//        if (x >= 0 && y >= 0 && x < distance_map.cols && y < distance_map.rows) {
+//            int index = y * distance_map.cols + x;
+//            Q.push(CellData(index, 0, 0, 0));
+//        }
+//    }
 
     std::vector<KernelCell> kernel;
 
@@ -224,18 +271,18 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     {
         for(double y = -1; y < 1; y += 0.2)
         {
-            for(double a = 0; a < 6.28; a += 0.3)
+            for(double a = 0; a < 6.28; a += 0.1)
             {
                 geo::Pose3D laser_pose;
                 laser_pose.t = geo::Vector3(x, y, 0);
                 laser_pose.R.setRPY(0, 0, a);
 
-                double z1 = laser_pose.R.xx / res;
-                double z2 = laser_pose.R.xy / res;
-                double z3 = laser_pose.R.yx / res;
-                double z4 = laser_pose.R.yy / res;
-                double t1 = laser_pose.t.x / res - distance_map.cols / 2;
-                double t2 = laser_pose.t.y / res - distance_map.cols / 2;
+                double z1 = laser_pose.R.xx / grid_resolution;
+                double z2 = laser_pose.R.xy / grid_resolution;
+                double z3 = laser_pose.R.yx / grid_resolution;
+                double z4 = laser_pose.R.yy / grid_resolution;
+                double t1 = laser_pose.t.x / grid_resolution - distance_map.cols / 2;
+                double t2 = laser_pose.t.y / grid_resolution - distance_map.cols / 2;
 
                 double sum_sq_error = 0;
                 for(unsigned int i = 0; i < sensor_points.size(); ++i)
@@ -272,7 +319,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         {
             for(int x = 0; x < rgb_image.cols; ++x)
             {
-                int c = distance_map.at<float>(y, x) / ((max_dist / res) * (max_dist / res)) * 255;
+                int c = distance_map.at<float>(y, x) / ((max_dist / grid_resolution) * (max_dist / grid_resolution)) * 255;
                 rgb_image.at<cv::Vec3b>(y, x) = cv::Vec3b(c, c, c);
             }
         }
@@ -280,8 +327,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         for(unsigned int i = 0; i < sensor_points.size(); ++i)
         {
             const geo::Vector3& p = best_laser_pose * sensor_points[i];
-            int mx = -p.y / res + distance_map.cols / 2;
-            int my = -p.x / res + distance_map.rows / 2;
+            int mx = -p.y / grid_resolution + distance_map.cols / 2;
+            int my = -p.x / grid_resolution + distance_map.rows / 2;
             rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
         }
 
