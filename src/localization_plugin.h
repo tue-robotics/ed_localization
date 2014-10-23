@@ -36,6 +36,8 @@ private:
 
     bool pose_initialized_;
 
+    geo::Pose3D best_laser_pose_;
+
     std::vector<Sample> samples_;
 
     // RENDERING

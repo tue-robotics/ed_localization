@@ -173,9 +173,12 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     if (!last_laser_msg_)
         return;
 
-
     tue::Timer timer;
     timer.start();
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Update sensor model
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if (lrf_.getNumBeams() != last_laser_msg_->ranges.size())
     {
@@ -187,6 +190,10 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     std::vector<double> sensor_ranges(last_laser_msg_->ranges.size());
     for (unsigned int i = 0; i < last_laser_msg_->ranges.size(); ++i)
         sensor_ranges[i] = last_laser_msg_->ranges[i];
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Create world model cross section
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     std::vector<ed::EntityConstPtr> entities;
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
@@ -215,7 +222,9 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         lrf_.render(options, render_result);
     }
 
-    std::cout << render_result.p_min << " " << render_result.p_max << std::endl;
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Create distance map
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     double max_dist = 0.3;
 
@@ -227,21 +236,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         distance_map.at<float>(0, i) = 0;
         distance_map.at<float>(grid_size - 1, i) = 0;
     }
-
-//    std::vector<geo::Vector3> model_points;
-//    lrf_.rangesToPoints(model_ranges, model_points);
-
-//    for(unsigned int i = 0; i < model_points.size(); ++i)
-//    {
-//        const geo::Vector3& p = model_points[i];
-//        int x = -p.y / grid_resolution + grid_size / 2;
-//        int y = -p.x / grid_resolution + grid_size / 2;
-
-//        if (x >= 0 && y >= 0 && x < distance_map.cols && y < distance_map.rows) {
-//            int index = y * distance_map.cols + x;
-//            Q.push(CellData(index, 0, 0, 0));
-//        }
-//    }
 
     std::vector<KernelCell> kernel;
 
@@ -273,59 +267,105 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         Q.pop();
     }
 
-    std::vector<geo::Vector3> sensor_points;
-    lrf_.rangesToPoints(sensor_ranges, sensor_points);
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Create samples
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    double min_sum_sq_error = 1e10;
-    geo::Pose3D best_laser_pose;
+    std::vector<geo::Pose3D> poses;
 
-    for(double x = render_result.p_min.x; x < render_result.p_max.x; x += 0.2)
+    if (!pose_initialized_)
     {
-        for(double y = render_result.p_min.y; y < render_result.p_max.y; y += 0.2)
+        // Uniform sampling over world
+
+        for(double x = render_result.p_min.x; x < render_result.p_max.x; x += 0.2)
         {
-            for(double a = 0; a < 6.28; a += 0.1)
+            for(double y = render_result.p_min.y; y < render_result.p_max.y; y += 0.2)
             {
-                geo::Pose3D laser_pose;
-                laser_pose.t = geo::Vector3(x, y, 0);
-                laser_pose.R.setRPY(0, 0, a);
-
-                double z1 = laser_pose.R.xx / grid_resolution;
-                double z2 = laser_pose.R.xy / grid_resolution;
-                double z3 = laser_pose.R.yx / grid_resolution;
-                double z4 = laser_pose.R.yy / grid_resolution;
-                double t1 = laser_pose.t.x / grid_resolution - distance_map.cols / 2;
-                double t2 = laser_pose.t.y / grid_resolution - distance_map.cols / 2;
-
-                double sum_sq_error = 0;
-                for(unsigned int i = 0; i < sensor_points.size(); ++i)
+                for(double a = 0; a < 6.28; a += 0.1)
                 {
-                    const geo::Vector3& v = sensor_points[i];
-                    double py = z3 * v.x + z4 * v.y + t2;
-                    int mx = -py;
+                    geo::Pose3D laser_pose;
+                    laser_pose.t = geo::Vector3(x, y, 0);
+                    laser_pose.R.setRPY(0, 0, a);
 
-                    if (mx > 0 && mx < grid_size)
-                    {
-                        double px = z1 * v.x + z2 * v.y + t1;
-                        int my = -px;
-
-                        if (my > 0 && my < grid_size)
-                        {
-                            sum_sq_error += distance_map.at<float>(my, mx);
-                        }
-                    }
+                    poses.push_back(laser_pose);
                 }
+            }
+        }
+    }
+    else
+    {
+        poses.push_back(best_laser_pose_);
 
-                if (sum_sq_error < min_sum_sq_error)
+        for(double dx = -0.3; dx < 0.3; dx += 0.1)
+        {
+            for(double dy = -0.3; dy < 0.3; dy += 0.1)
+            {
+                for(double da = -1; da < 1; da += 0.1)
                 {
-                    min_sum_sq_error = sum_sq_error;
-                    best_laser_pose = laser_pose;
+                    geo::Pose3D dT;
+                    dT.t = geo::Vector3(dx, dy, 0);
+                    dT.R.setRPY(0, 0, da);
+
+                    poses.push_back(best_laser_pose_ * dT);
                 }
             }
         }
     }
 
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Test samples and find sample with lowest error
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    std::vector<geo::Vector3> sensor_points;
+    lrf_.rangesToPoints(sensor_ranges, sensor_points);
+
+    int i_step = 1;
+    if (poses.size() > 10000)
+        i_step = sensor_points.size() / 100;  // limit to 100 beams
+
+    std::cout << "i_step = " << i_step << std::endl;
+
+    double min_sum_sq_error = 1e10;
+    for(std::vector<geo::Pose3D>::const_iterator it = poses.begin(); it != poses.end(); ++it)
+    {
+        const geo::Pose3D& laser_pose = *it;
+
+        double z1 = laser_pose.R.xx / grid_resolution;
+        double z2 = laser_pose.R.xy / grid_resolution;
+        double z3 = laser_pose.R.yx / grid_resolution;
+        double z4 = laser_pose.R.yy / grid_resolution;
+        double t1 = laser_pose.t.x / grid_resolution - distance_map.cols / 2;
+        double t2 = laser_pose.t.y / grid_resolution - distance_map.cols / 2;
+
+        double sum_sq_error = 0;
+        for(unsigned int i = 0; i < sensor_points.size(); i += i_step)
+        {
+            const geo::Vector3& v = sensor_points[i];
+            double py = z3 * v.x + z4 * v.y + t2;
+            int mx = -py;
+
+            if (mx > 0 && mx < grid_size)
+            {
+                double px = z1 * v.x + z2 * v.y + t1;
+                int my = -px;
+
+                if (my > 0 && my < grid_size)
+                {
+                    sum_sq_error += distance_map.at<float>(my, mx);
+                }
+            }
+        }
+
+        if (sum_sq_error < min_sum_sq_error)
+        {
+            min_sum_sq_error = sum_sq_error;
+            best_laser_pose_ = laser_pose;
+            pose_initialized_ = true;
+        }
+    }
+
     std::cout << min_sum_sq_error << std::endl;
-    std::cout << best_laser_pose << std::endl;
+    std::cout << best_laser_pose_ << std::endl;
 
     std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
 
@@ -344,7 +384,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
         for(unsigned int i = 0; i < sensor_points.size(); ++i)
         {
-            const geo::Vector3& p = best_laser_pose * sensor_points[i];
+            const geo::Vector3& p = best_laser_pose_ * sensor_points[i];
             int mx = -p.y / grid_resolution + distance_map.cols / 2;
             int my = -p.x / grid_resolution + distance_map.rows / 2;
 
