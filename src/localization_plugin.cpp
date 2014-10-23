@@ -230,12 +230,23 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
                 laser_pose.t = geo::Vector3(x, y, 0);
                 laser_pose.R.setRPY(0, 0, a);
 
+                double z1 = laser_pose.R.xx / res;
+                double z2 = laser_pose.R.xy / res;
+                double z3 = laser_pose.R.yx / res;
+                double z4 = laser_pose.R.yy / res;
+                double t1 = laser_pose.t.x / res - distance_map.cols / 2;
+                double t2 = laser_pose.t.y / res - distance_map.cols / 2;
+
                 double sum_sq_error = 0;
                 for(unsigned int i = 0; i < sensor_points.size(); ++i)
                 {
-                    const geo::Vector3& p = laser_pose * sensor_points[i];
-                    int mx = -p.y / res + distance_map.cols / 2;
-                    int my = -p.x / res + distance_map.rows / 2;
+                    const geo::Vector3& v = sensor_points[i];
+                    double px = z1 * v.x + z2 * v.y + t1;
+                    double py = z3 * v.x + z4 * v.y + t2;
+
+                    int mx = -py;
+                    int my = -px;
+
                     sum_sq_error += distance_map.at<float>(my, mx);
                 }
 
