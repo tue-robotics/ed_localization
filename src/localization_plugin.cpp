@@ -198,7 +198,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     std::vector<ed::EntityConstPtr> entities;
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
-        std::cout << it->second->id() << std::endl;
+//        std::cout << it->second->id() << std::endl;
         if (it->second->shape())
             entities.push_back(it->second);
     }
