@@ -369,6 +369,10 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
     std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
 
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Visualization
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     bool visualize = true;
     if (visualize)
     {
@@ -385,14 +389,24 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         for(unsigned int i = 0; i < sensor_points.size(); ++i)
         {
             const geo::Vector3& p = best_laser_pose_ * sensor_points[i];
-            int mx = -p.y / grid_resolution + distance_map.cols / 2;
-            int my = -p.x / grid_resolution + distance_map.rows / 2;
+            int mx = -p.y / grid_resolution + grid_size / 2;
+            int my = -p.x / grid_resolution + grid_size / 2;
 
             if (mx >= 0 && my >= 0 && mx < grid_size && my <grid_size)
             {
                 rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
             }
         }
+
+        // Visualize sensor
+        int lmx = -best_laser_pose_.t.y / grid_resolution + grid_size / 2;
+        int lmy = -best_laser_pose_.t.x / grid_resolution + grid_size / 2;
+        cv::circle(rgb_image, cv::Point(lmx,lmy), 0.3 / grid_resolution, cv::Scalar(0, 0, 255), 1);
+
+        geo::Vector3 d = best_laser_pose_.R * geo::Vector3(0.3, 0, 0);
+        int dmx = -d.y / grid_resolution;
+        int dmy = -d.x / grid_resolution;
+        cv::line(rgb_image, cv::Point(lmx, lmy), cv::Point(lmx + dmx, lmy + dmy), cv::Scalar(0, 0, 255), 1);
 
         cv::imshow("distance_map", rgb_image);
         cv::waitKey(1);
