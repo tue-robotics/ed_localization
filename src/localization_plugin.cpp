@@ -288,13 +288,19 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
                 for(unsigned int i = 0; i < sensor_points.size(); ++i)
                 {
                     const geo::Vector3& v = sensor_points[i];
-                    double px = z1 * v.x + z2 * v.y + t1;
                     double py = z3 * v.x + z4 * v.y + t2;
-
                     int mx = -py;
-                    int my = -px;
 
-                    sum_sq_error += distance_map.at<float>(my, mx);
+                    if (mx > 0 && mx < grid_size)
+                    {
+                        double px = z1 * v.x + z2 * v.y + t1;
+                        int my = -px;
+
+                        if (my > 0 && my < grid_size)
+                        {
+                            sum_sq_error += distance_map.at<float>(my, mx);
+                        }
+                    }
                 }
 
                 if (sum_sq_error < min_sum_sq_error)
@@ -329,7 +335,11 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             const geo::Vector3& p = best_laser_pose * sensor_points[i];
             int mx = -p.y / grid_resolution + distance_map.cols / 2;
             int my = -p.x / grid_resolution + distance_map.rows / 2;
-            rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
+
+            if (mx >= 0 && my >= 0 && mx < grid_size && my <grid_size)
+            {
+                rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
+            }
         }
 
         cv::imshow("distance_map", rgb_image);
