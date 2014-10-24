@@ -55,7 +55,7 @@ include_directories(
 )
 
 add_library(ed_localization_plugin
-    src/localization_plugin.cpp
+    src/localization_plugin2.cpp
 )
 # target_link_libraries(library_name ${catkin_LIBRARIES})
 

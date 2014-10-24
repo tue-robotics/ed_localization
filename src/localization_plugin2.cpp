@@ -12,32 +12,6 @@
 
 #include <geolib/Shape.h>
 
-// Inflation
-#include <queue>
-
-// ----------------------------------------------------------------------------------------------------
-
-class CellData
-{
-public:
-
-  CellData(int index_, int dx_, int dy_, int distance_) :
-      index(index_), dx(dx_), dy(dy_), distance(distance_)
-  {}
-
-  int index;
-  int dx, dy;
-  int distance;
-
-};
-
-// ----------------------------------------------------------------------------------------------------
-
-inline bool operator<(const CellData &a, const CellData &b)
-{
-  return a.distance > b.distance;
-}
-
 // ----------------------------------------------------------------------------------------------------
 
 class LineRenderResult : public geo::LaserRangeFinder::RenderResult
@@ -45,29 +19,13 @@ class LineRenderResult : public geo::LaserRangeFinder::RenderResult
 
 public:
 
-    LineRenderResult(std::queue<CellData>& Q, int grid_size, double res) : Q_(Q), grid_size_(grid_size), res_(res),
-        p_min(1e9), p_max(-1e9) {}
+    LineRenderResult(std::vector<geo::Vec3>& lines_start, std::vector<geo::Vec3>& lines_end)
+        : lines_start_(lines_start), lines_end_(lines_end), p_min(1e9), p_max(-1e9) {}
 
     void renderLine(const geo::Vector3& p1, const geo::Vector3& p2)
     {
-        geo::Vector3 v_diff = p2 - p1;
-        double n_diff = v_diff.length();
-
-        geo::Vector3 vd = v_diff / n_diff * res_;
-        int n = n_diff / res_ + 1;
-
-        geo::Vector3 p = p1;
-        for(int i = 0; i < n; ++i)
-        {
-            int x = -p.y / res_ + grid_size_ / 2;
-            int y = -p.x / res_ + grid_size_ / 2;
-
-            if (x >= 0 && y >= 0 && x < grid_size_ && y <grid_size_) {
-                int index = y * grid_size_ + x;
-                Q_.push(CellData(index, 0, 0, 0));
-            }
-            p += vd;
-        }
+        lines_start_.push_back(p1);
+        lines_end_.push_back(p2);
 
         p_min.x = std::min(p_min.x, std::min(p1.x, p2.x));
         p_max.x = std::max(p_max.x, std::max(p1.x, p2.x));
@@ -78,48 +36,64 @@ public:
 
 private:
 
-    std::queue<CellData>& Q_;
-    int grid_size_;
-    double res_;
+    std::vector<geo::Vec3>& lines_start_;
+    std::vector<geo::Vec3>& lines_end_;
 
 public:
 
-    bool empty;
     geo::Vec2 p_min, p_max;
 
 };
 
 // ----------------------------------------------------------------------------------------------------
 
-void drawLaserPoints(cv::Mat& img, const geo::LaserRangeFinder& lrf, const std::vector<double>& ranges, const cv::Vec3b& clr)
+void renderLine(const geo::LaserRangeFinder& lrf, const geo::Vector3& p1, const geo::Vector3& p2, std::vector<double>& ranges)
 {
-    std::vector<geo::Vector3> points;
-    if (lrf.rangesToPoints(ranges, points)) {
-        for(unsigned int i = 0; i < points.size(); ++i) {
-            const geo::Vector3& p = points[i];
-            double x = (-p.y * 25) + img.cols / 2;
-            double y = (-p.x * 25) + img.rows / 2;
+    double a1 = lrf.getAngle(p1.getX(), p1.getY());
+    double a2 = lrf.getAngle(p2.getX(), p2.getY());
 
-            if (x >= 0 && y >= 0 && x < img.cols && y < img.rows) {
-                img.at<cv::Vec3b>(y, x) = clr;
-            }
+    double a_min = std::min(a1, a2);
+    double a_max = std::max(a1, a2);
+
+    int i_min = lrf.getAngleUpperIndex(a_min);
+    int i_max = lrf.getAngleUpperIndex(a_max);
+
+    geo::Vector3 s = p2 - p1;
+
+    // d = (q1 - ray_start) x s / (r x s)
+    //   = (q1 x s) / (r x s)
+
+    if (a_max - a_min < M_PI)
+    {
+        // line is in front of sensor
+        for(int i = i_min; i < i_max; ++i)
+        {
+            const geo::Vector3& r = lrf.rayDirections()[i];
+            double d = (p1.x * s.y - p1.y * s.x) / (r.x * s.y - r.y * s.x);
+            if (d > 0 && (ranges[i] == 0 || d < ranges[i]))
+                ranges[i] = d;
+        }
+    }
+    else
+    {
+        // line is behind sensor
+        for(int i = 0; i < i_min; ++i)
+        {
+            const geo::Vector3& r = lrf.rayDirections()[i];
+            double d = (p1.x * s.y - p1.y * s.x) / (r.x * s.y - r.y * s.x);
+            if (d > 0 && (ranges[i] == 0 || d < ranges[i]))
+                ranges[i] = d;
+        }
+
+        for(int i = i_max; i < lrf.rayDirections().size(); ++i)
+        {
+            const geo::Vector3& r = lrf.rayDirections()[i];
+            double d = (p1.x * s.y - p1.y * s.x) / (r.x * s.y - r.y * s.x);
+            if (d > 0 && (ranges[i] == 0 || d < ranges[i]))
+                ranges[i] = d;
         }
     }
 }
-
-// ----------------------------------------------------------------------------------------------------
-
-class KernelCell
-{
-public:
-
-    KernelCell(int d_index_, int dx_, int dy_) :
-        d_index(d_index_), dx(dx_), dy(dy_)
-    {}
-
-    int d_index;
-    int dx, dy;
-};
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -207,11 +181,9 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     laser_pose.t = laser_pose_.t + geo::Vector3(0, 0, 0);
     laser_pose.R.setRPY(0, 0, 0);
 
-    double grid_resolution = 0.025;
-    int grid_size = 800;
-
-    std::queue<CellData> Q;
-    LineRenderResult render_result(Q, grid_size, grid_resolution);
+    std::vector<geo::Vector3> lines_start;
+    std::vector<geo::Vector3> lines_end;
+    LineRenderResult render_result(lines_start, lines_end);
 
     for(std::vector<ed::EntityConstPtr>::const_iterator it = entities.begin(); it != entities.end(); ++it)
     {
@@ -221,51 +193,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         geo::Transform t_inv = laser_pose.inverse() * e->pose();
         options.setMesh(e->shape()->getMesh(), t_inv);
         lrf_.render(options, render_result);
-    }
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Create distance map
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    double max_dist = 0.3;
-
-    cv::Mat distance_map(grid_size, grid_size, CV_32FC1, (max_dist / grid_resolution) * (max_dist / grid_resolution));
-    for(int i = 0; i < grid_size; ++i)
-    {
-        distance_map.at<float>(i, 0) = 0;
-        distance_map.at<float>(i, grid_size - 1) = 0;
-        distance_map.at<float>(0, i) = 0;
-        distance_map.at<float>(grid_size - 1, i) = 0;
-    }
-
-    std::vector<KernelCell> kernel;
-
-    kernel.push_back(KernelCell(-distance_map.cols, 0, -1));
-    kernel.push_back(KernelCell(distance_map.cols, 0, 1));
-    kernel.push_back(KernelCell(-1, -1, 0));
-    kernel.push_back(KernelCell( 1,  1, 0));
-
-    while(!Q.empty())
-    {
-        const CellData& c = Q.front();
-
-        double current_distance = distance_map.at<float>(c.index);
-        if (c.distance < current_distance)
-        {
-            distance_map.at<float>(c.index) = c.distance;
-            for(unsigned int i = 0; i < kernel.size(); ++i)
-            {
-                const KernelCell& kc = kernel[i];
-                int new_index = c.index + kc.d_index;
-                int dx_new = c.dx + kc.dx;
-                int dy_new = c.dy + kc.dy;
-
-                int new_distance = (dx_new * dx_new) + (dy_new * dy_new);
-                Q.push(CellData(new_index, dx_new, dy_new, new_distance));
-            }
-        }
-
-        Q.pop();
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -330,31 +257,38 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     for(std::vector<geo::Pose3D>::const_iterator it = poses.begin(); it != poses.end(); ++it)
     {
         const geo::Pose3D& laser_pose = *it;
+        geo::Pose3D laser_pose_inv = laser_pose.inverse();
 
-        double z1 = laser_pose.R.xx / grid_resolution;
-        double z2 = laser_pose.R.xy / grid_resolution;
-        double z3 = laser_pose.R.yx / grid_resolution;
-        double z4 = laser_pose.R.yy / grid_resolution;
-        double t1 = laser_pose.t.x / grid_resolution - distance_map.cols / 2;
-        double t2 = laser_pose.t.y / grid_resolution - distance_map.cols / 2;
+        double z1 = laser_pose_inv.R.xx;
+        double z2 = laser_pose_inv.R.xy;
+        double z3 = laser_pose_inv.R.yx;
+        double z4 = laser_pose_inv.R.yy;
+        double t1 = laser_pose_inv.t.x;
+        double t2 = laser_pose_inv.t.y;
+
+        // Calculate sensor model for this pose
+        std::vector<double> model_ranges(sensor_ranges.size(), 0);
+
+        for(unsigned int i = 0; i < lines_start.size(); ++i)
+        {
+            const geo::Vector3& p1 = lines_start[i];
+            const geo::Vector3& p2 = lines_end[i];
+
+            // Transform the points to the laser pose
+            geo::Vector3 p1_t(z1 * p1.x + z2 * p1.y + t1, z3 * p1.x + z4 * p1.y + t2, 0);
+            geo::Vector3 p2_t(z1 * p2.x + z2 * p2.y + t1, z3 * p2.x + z4 * p2.y + t2, 0);
+
+//            std::cout << p1_t << ", " << p2_t << std::endl;
+
+            // Render the line as if seen by the sensor
+            renderLine(lrf_, p1_t, p2_t, model_ranges);
+        }
 
         double sum_sq_error = 0;
-        for(unsigned int i = 0; i < sensor_points.size(); i += i_step)
+        for(unsigned int i = 0; i < sensor_ranges.size(); i += i_step)
         {
-            const geo::Vector3& v = sensor_points[i];
-            double py = z3 * v.x + z4 * v.y + t2;
-            int mx = -py;
-
-            if (mx > 0 && mx < grid_size)
-            {
-                double px = z1 * v.x + z2 * v.y + t1;
-                int my = -px;
-
-                if (my > 0 && my < grid_size)
-                {
-                    sum_sq_error += distance_map.at<float>(my, mx);
-                }
-            }
+            double diff = sensor_ranges[i] - model_ranges[i];
+            sum_sq_error += diff * diff;
         }
 
         if (sum_sq_error < min_sum_sq_error)
@@ -368,7 +302,10 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     std::cout << min_sum_sq_error << std::endl;
     std::cout << best_laser_pose_ << std::endl;
 
-    std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
+    std::cout << "Num Poses = " << poses.size() << std::endl;
+    std::cout << "Num lines = " << lines_start.size() << std::endl;
+    std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
+    std::cout << "Time per pose = " << timer.getElapsedTimeInMilliSec() / poses.size() << " ms" << std::endl;
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Visualization
@@ -377,15 +314,10 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     bool visualize = true;
     if (visualize)
     {
-        cv::Mat rgb_image(distance_map.rows, distance_map.cols, CV_8UC3, cv::Scalar(0, 0, 0));
-        for(int y = 0; y < rgb_image.rows; ++y)
-        {
-            for(int x = 0; x < rgb_image.cols; ++x)
-            {
-                int c = distance_map.at<float>(y, x) / ((max_dist / grid_resolution) * (max_dist / grid_resolution)) * 255;
-                rgb_image.at<cv::Vec3b>(y, x) = cv::Vec3b(c, c, c);
-            }
-        }
+        int grid_size = 800;
+        double grid_resolution = 0.025;
+
+        cv::Mat rgb_image(grid_size, grid_size, CV_8UC3, cv::Scalar(10, 10, 10));
 
         for(unsigned int i = 0; i < sensor_points.size(); ++i)
         {
