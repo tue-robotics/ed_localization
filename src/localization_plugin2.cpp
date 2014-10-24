@@ -19,13 +19,13 @@ class LineRenderResult : public geo::LaserRangeFinder::RenderResult
 
 public:
 
-    LineRenderResult(std::vector<geo::Vec3>& lines_start, std::vector<geo::Vec3>& lines_end)
+    LineRenderResult(std::vector<geo::Vec2>& lines_start, std::vector<geo::Vec2>& lines_end)
         : lines_start_(lines_start), lines_end_(lines_end), p_min(1e9), p_max(-1e9) {}
 
     void renderLine(const geo::Vector3& p1, const geo::Vector3& p2)
     {
-        lines_start_.push_back(p1);
-        lines_end_.push_back(p2);
+        lines_start_.push_back(geo::Vec2(p1.x, p1.y));
+        lines_end_.push_back(geo::Vec2(p2.x, p2.y));
 
         p_min.x = std::min(p_min.x, std::min(p1.x, p2.x));
         p_max.x = std::max(p_max.x, std::max(p1.x, p2.x));
@@ -36,8 +36,8 @@ public:
 
 private:
 
-    std::vector<geo::Vec3>& lines_start_;
-    std::vector<geo::Vec3>& lines_end_;
+    std::vector<geo::Vec2>& lines_start_;
+    std::vector<geo::Vec2>& lines_end_;
 
 public:
 
@@ -47,10 +47,10 @@ public:
 
 // ----------------------------------------------------------------------------------------------------
 
-void renderLine(const geo::LaserRangeFinder& lrf, const geo::Vector3& p1, const geo::Vector3& p2, std::vector<double>& ranges)
+void renderLine(const geo::LaserRangeFinder& lrf, const geo::Vec2& p1, const geo::Vec2& p2, std::vector<double>& ranges)
 {
-    double a1 = lrf.getAngle(p1.getX(), p1.getY());
-    double a2 = lrf.getAngle(p2.getX(), p2.getY());
+    double a1 = lrf.getAngle(p1.x, p1.y);
+    double a2 = lrf.getAngle(p2.x, p2.y);
 
     double a_min = std::min(a1, a2);
     double a_max = std::max(a1, a2);
@@ -58,7 +58,7 @@ void renderLine(const geo::LaserRangeFinder& lrf, const geo::Vector3& p1, const 
     int i_min = lrf.getAngleUpperIndex(a_min);
     int i_max = lrf.getAngleUpperIndex(a_max);
 
-    geo::Vector3 s = p2 - p1;
+    geo::Vec2 s = p2 - p1;
 
     // d = (q1 - ray_start) x s / (r x s)
     //   = (q1 x s) / (r x s)
@@ -239,8 +239,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     laser_pose.t = laser_pose_.t + geo::Vector3(0, 0, 0);
     laser_pose.R.setRPY(0, 0, 0);
 
-    std::vector<geo::Vector3> lines_start;
-    std::vector<geo::Vector3> lines_end;
+    std::vector<geo::Vec2> lines_start;
+    std::vector<geo::Vec2> lines_end;
     LineRenderResult render_result(lines_start, lines_end);
 
     for(std::vector<ed::EntityConstPtr>::const_iterator it = entities.begin(); it != entities.end(); ++it)
@@ -252,8 +252,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         options.setMesh(e->shape()->getMesh(), t_inv);
         lrf_.render(options, render_result);
     }
-
-
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Test samples and find sample with lowest error
@@ -280,12 +278,12 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
         for(unsigned int i = 0; i < lines_start.size(); ++i)
         {
-            const geo::Vector3& p1 = lines_start[i];
-            const geo::Vector3& p2 = lines_end[i];
+            const geo::Vec2& p1 = lines_start[i];
+            const geo::Vec2& p2 = lines_end[i];
 
             // Transform the points to the laser pose
-            geo::Vector3 p1_t(z1 * p1.x + z2 * p1.y + t1, z3 * p1.x + z4 * p1.y + t2, 0);
-            geo::Vector3 p2_t(z1 * p2.x + z2 * p2.y + t1, z3 * p2.x + z4 * p2.y + t2, 0);
+            geo::Vec2 p1_t(z1 * p1.x + z2 * p1.y + t1, z3 * p1.x + z4 * p1.y + t2);
+            geo::Vec2 p2_t(z1 * p2.x + z2 * p2.y + t1, z3 * p2.x + z4 * p2.y + t2);
 
 //            std::cout << p1_t << ", " << p2_t << std::endl;
 
@@ -350,11 +348,11 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
         for(unsigned int i = 0; i < lines_start.size(); ++i)
         {
-            const geo::Vector3& p1 = lines_start[i];
+            const geo::Vec2& p1 = lines_start[i];
             int mx1 = -p1.y / grid_resolution + grid_size / 2;
             int my1 = -p1.x / grid_resolution + grid_size / 2;
 
-            const geo::Vector3& p2 = lines_end[i];
+            const geo::Vec2& p2 = lines_end[i];
             int mx2 = -p2.y / grid_resolution + grid_size / 2;
             int my2 = -p2.x / grid_resolution + grid_size / 2;
 
