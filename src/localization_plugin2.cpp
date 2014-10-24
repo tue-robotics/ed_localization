@@ -266,12 +266,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         const geo::Pose3D& laser_pose = *it;
         geo::Pose3D laser_pose_inv = laser_pose.inverse();
 
-        double z1 = laser_pose_inv.R.xx;
-        double z2 = laser_pose_inv.R.xy;
-        double z3 = laser_pose_inv.R.yx;
-        double z4 = laser_pose_inv.R.yy;
-        double t1 = laser_pose_inv.t.x;
-        double t2 = laser_pose_inv.t.y;
+        geo::Transform2 T(geo::Mat2(laser_pose_inv.R.xx, laser_pose_inv.R.xy, laser_pose_inv.R.yx, laser_pose_inv.R.yy),
+                          geo::Vec2(laser_pose_inv.t.x, laser_pose_inv.t.y));
 
         // Calculate sensor model for this pose
         std::vector<double> model_ranges(sensor_ranges.size(), 0);
@@ -282,10 +278,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             const geo::Vec2& p2 = lines_end[i];
 
             // Transform the points to the laser pose
-            geo::Vec2 p1_t(z1 * p1.x + z2 * p1.y + t1, z3 * p1.x + z4 * p1.y + t2);
-            geo::Vec2 p2_t(z1 * p2.x + z2 * p2.y + t1, z3 * p2.x + z4 * p2.y + t2);
-
-//            std::cout << p1_t << ", " << p2_t << std::endl;
+            geo::Vec2 p1_t = T * p1;
+            geo::Vec2 p2_t = T * p2;
 
             // Render the line as if seen by the sensor
             renderLine(lrf_, p1_t, p2_t, model_ranges);
@@ -294,8 +288,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         double sum_sq_error = 0;
         for(unsigned int i = 0; i < sensor_ranges.size(); ++i)
         {
-//            std::cout << i << ": " << sensor_ranges[i] << " " << model_ranges[i] << std::endl;
-
             double diff = sensor_ranges[i] - model_ranges[i];
             if (std::abs<double>(diff) > 0.3)
                 diff = 0.3;
