@@ -151,19 +151,77 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     timer.start();
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Create samples
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    std::vector<geo::Pose3D> poses;
+
+    if (!pose_initialized_)
+    {
+        // Uniform sampling over world
+
+        for(double x = -5; x < 5; x += 0.2)
+        {
+            for(double y = -5; y < 5; y += 0.2)
+            {
+                for(double a = 0; a < 6.28; a += 0.1)
+                {
+                    geo::Pose3D laser_pose;
+                    laser_pose.t = geo::Vector3(x, y, 0);
+                    laser_pose.R.setRPY(0, 0, a);
+
+                    poses.push_back(laser_pose);
+                }
+            }
+        }
+    }
+    else
+    {
+        poses.push_back(best_laser_pose_);
+
+        for(double dx = -0.1; dx < 0.1; dx += 0.05)
+        {
+            for(double dy = -0.1; dy < 0.1; dy += 0.05)
+            {
+                for(double da = -0.5; da < 0.5; da += 0.05)
+                {
+                    geo::Pose3D dT;
+                    dT.t = geo::Vector3(dx, dy, 0);
+                    dT.R.setRPY(0, 0, da);
+
+                    poses.push_back(best_laser_pose_ * dT);
+                }
+            }
+        }
+    }
+
+    unsigned int num_beams = last_laser_msg_->ranges.size();
+//    if (poses.size() > 10000)
+        num_beams = 100;  // limit to 100 beams
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update sensor model
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    if (lrf_.getNumBeams() != last_laser_msg_->ranges.size())
+    int i_step = last_laser_msg_->ranges.size() / num_beams;
+    std::vector<double> sensor_ranges;
+    for (unsigned int i = 0; i < last_laser_msg_->ranges.size(); i += i_step)
     {
-        lrf_.setNumBeams(last_laser_msg_->ranges.size());
+        double r = last_laser_msg_->ranges[i];
+
+        // Check for Inf
+        if (r != r || r > last_laser_msg_->range_max)
+            r = 0;
+        sensor_ranges.push_back(r);
+    }
+    num_beams = sensor_ranges.size();
+
+    if (lrf_.getNumBeams() != num_beams)
+    {
+        lrf_.setNumBeams(num_beams);
         lrf_.setRangeLimits(last_laser_msg_->range_min, last_laser_msg_->range_max);
         lrf_.setAngleLimits(last_laser_msg_->angle_min, last_laser_msg_->angle_max);
     }
-
-    std::vector<double> sensor_ranges(last_laser_msg_->ranges.size());
-    for (unsigned int i = 0; i < last_laser_msg_->ranges.size(); ++i)
-        sensor_ranges[i] = last_laser_msg_->ranges[i];
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Create world model cross section
@@ -172,7 +230,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     std::vector<ed::EntityConstPtr> entities;
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
-        if (it->second->id() == "pico_case")
+//        if (it->second->id() == "pico_case")
         if (it->second->shape())
             entities.push_back(it->second);
     }
@@ -195,50 +253,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         lrf_.render(options, render_result);
     }
 
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Create samples
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    std::vector<geo::Pose3D> poses;
-
-    if (!pose_initialized_)
-    {
-        // Uniform sampling over world
-
-        for(double x = render_result.p_min.x; x < render_result.p_max.x; x += 0.2)
-        {
-            for(double y = render_result.p_min.y; y < render_result.p_max.y; y += 0.2)
-            {
-                for(double a = 0; a < 6.28; a += 0.1)
-                {
-                    geo::Pose3D laser_pose;
-                    laser_pose.t = geo::Vector3(x, y, 0);
-                    laser_pose.R.setRPY(0, 0, a);
-
-                    poses.push_back(laser_pose);
-                }
-            }
-        }
-    }
-    else
-    {
-        poses.push_back(best_laser_pose_);
-
-        for(double dx = -0.3; dx < 0.3; dx += 0.1)
-        {
-            for(double dy = -0.3; dy < 0.3; dy += 0.1)
-            {
-                for(double da = -1; da < 1; da += 0.1)
-                {
-                    geo::Pose3D dT;
-                    dT.t = geo::Vector3(dx, dy, 0);
-                    dT.R.setRPY(0, 0, da);
-
-                    poses.push_back(best_laser_pose_ * dT);
-                }
-            }
-        }
-    }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Test samples and find sample with lowest error
@@ -247,9 +262,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     std::vector<geo::Vector3> sensor_points;
     lrf_.rangesToPoints(sensor_ranges, sensor_points);
 
-    int i_step = 1;
-    if (poses.size() > 10000)
-        i_step = sensor_points.size() / 100;  // limit to 100 beams
+
 
     std::cout << "i_step = " << i_step << std::endl;
 
@@ -285,11 +298,15 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         }
 
         double sum_sq_error = 0;
-        for(unsigned int i = 0; i < sensor_ranges.size(); i += i_step)
+        for(unsigned int i = 0; i < sensor_ranges.size(); ++i)
         {
+//            std::cout << i << ": " << sensor_ranges[i] << " " << model_ranges[i] << std::endl;
+
             double diff = sensor_ranges[i] - model_ranges[i];
             sum_sq_error += diff * diff;
         }
+
+//        std::cout << sum_sq_error << std::endl;
 
         if (sum_sq_error < min_sum_sq_error)
         {
@@ -329,6 +346,20 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             {
                 rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
             }
+        }
+
+
+        for(unsigned int i = 0; i < lines_start.size(); ++i)
+        {
+            const geo::Vector3& p1 = lines_start[i];
+            int mx1 = -p1.y / grid_resolution + grid_size / 2;
+            int my1 = -p1.x / grid_resolution + grid_size / 2;
+
+            const geo::Vector3& p2 = lines_end[i];
+            int mx2 = -p2.y / grid_resolution + grid_size / 2;
+            int my2 = -p2.x / grid_resolution + grid_size / 2;
+
+            cv::line(rgb_image, cv::Point(mx1, my1), cv::Point(mx2, my2), cv::Scalar(255, 255, 255), 1);
         }
 
         // Visualize sensor
