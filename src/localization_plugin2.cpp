@@ -49,21 +49,29 @@ public:
 
 void renderLine(const geo::LaserRangeFinder& lrf, const geo::Vec2& p1, const geo::Vec2& p2, std::vector<double>& ranges)
 {
-    double a1 = lrf.getAngle(p1.x, p1.y);
-    double a2 = lrf.getAngle(p2.x, p2.y);
+//    double a1 = lrf.getAngle(p1.x, p1.y);
+//    double a2 = lrf.getAngle(p2.x, p2.y);
 
-    double a_min = std::min(a1, a2);
-    double a_max = std::max(a1, a2);
+//    double a_min = std::min(a1, a2);
+//    double a_max = std::max(a1, a2);
 
-    int i_min = lrf.getAngleUpperIndex(a_min);
-    int i_max = lrf.getAngleUpperIndex(a_max);
+//    int i_min = lrf.getAngleUpperIndex(a_min);
+//    int i_max = lrf.getAngleUpperIndex(a_max);
+
+    int i_p1 = lrf.getAngleUpperIndex(p1.x, p1.y);
+    int i_p2 = lrf.getAngleUpperIndex(p2.x, p2.y);
+
+    int i_min = std::min(i_p1, i_p2);
+    int i_max = std::max(i_p1, i_p2);
 
     geo::Vec2 s = p2 - p1;
 
     // d = (q1 - ray_start) x s / (r x s)
     //   = (q1 x s) / (r x s)
 
-    if (a_max - a_min < M_PI)
+//    std::cout << i_min << " " << i_max << std::endl;
+
+    if (i_min > lrf.i_left_ || i_max < lrf.i_right_)
     {
         // line is in front of sensor
         for(int i = i_min; i < i_max; ++i)
