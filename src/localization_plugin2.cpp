@@ -179,11 +179,11 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     {
         poses.push_back(best_laser_pose_);
 
-        for(double dx = -0.1; dx < 0.1; dx += 0.05)
+        for(double dx = -0.3; dx < 0.3; dx += 0.1)
         {
-            for(double dy = -0.1; dy < 0.1; dy += 0.05)
+            for(double dy = -0.3; dy < 0.3; dy += 0.1)
             {
-                for(double da = -0.5; da < 0.5; da += 0.05)
+                for(double da = -1; da < 1; da += 0.1)
                 {
                     geo::Pose3D dT;
                     dT.t = geo::Vector3(dx, dy, 0);
@@ -262,10 +262,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     std::vector<geo::Vector3> sensor_points;
     lrf_.rangesToPoints(sensor_ranges, sensor_points);
 
-
-
-    std::cout << "i_step = " << i_step << std::endl;
-
     double min_sum_sq_error = 1e10;
     for(std::vector<geo::Pose3D>::const_iterator it = poses.begin(); it != poses.end(); ++it)
     {
@@ -303,6 +299,9 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 //            std::cout << i << ": " << sensor_ranges[i] << " " << model_ranges[i] << std::endl;
 
             double diff = sensor_ranges[i] - model_ranges[i];
+            if (std::abs<double>(diff) > 0.3)
+                diff = 0.3;
+
             sum_sq_error += diff * diff;
         }
 
