@@ -163,11 +163,11 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     {
         poses.push_back(best_laser_pose_);
 
-        for(double dx = -0.3; dx < 0.3; dx += 0.1)
+        for(double dx = -0.2; dx < 0.2; dx += 0.05)
         {
-            for(double dy = -0.3; dy < 0.3; dy += 0.1)
+            for(double dy = -0.2; dy < 0.2; dy += 0.05)
             {
-                for(double da = -1; da < 1; da += 0.1)
+                for(double da = -0.5; da < 0.5; da += 0.05)
                 {
                     geo::Pose3D dT;
                     dT.t = geo::Vector3(dx, dy, 0);
