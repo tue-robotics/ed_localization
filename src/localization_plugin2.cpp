@@ -20,12 +20,13 @@ class LineRenderResult : public geo::LaserRangeFinder::RenderResult
 public:
 
     LineRenderResult(std::vector<geo::Vec2>& lines_start, std::vector<geo::Vec2>& lines_end)
-        : lines_start_(lines_start), lines_end_(lines_end), p_min(1e9), p_max(-1e9) {}
+        : geo::LaserRangeFinder::RenderResult(dummy_ranges_),
+          lines_start_(lines_start), lines_end_(lines_end), p_min(1e9), p_max(-1e9) {}
 
-    void renderLine(const geo::Vector3& p1, const geo::Vector3& p2)
+    void renderLine(const geo::Vec2& p1, const geo::Vec2& p2)
     {
-        lines_start_.push_back(geo::Vec2(p1.x, p1.y));
-        lines_end_.push_back(geo::Vec2(p2.x, p2.y));
+        lines_start_.push_back(p1);
+        lines_end_.push_back(p2);
 
         p_min.x = std::min(p_min.x, std::min(p1.x, p2.x));
         p_max.x = std::max(p_max.x, std::max(p1.x, p2.x));
@@ -36,6 +37,7 @@ public:
 
 private:
 
+    std::vector<double> dummy_ranges_;
     std::vector<geo::Vec2>& lines_start_;
     std::vector<geo::Vec2>& lines_end_;
 
@@ -44,64 +46,6 @@ public:
     geo::Vec2 p_min, p_max;
 
 };
-
-// ----------------------------------------------------------------------------------------------------
-
-void renderLine(const geo::LaserRangeFinder& lrf, const geo::Vec2& p1, const geo::Vec2& p2, std::vector<double>& ranges)
-{
-//    double a1 = lrf.getAngle(p1.x, p1.y);
-//    double a2 = lrf.getAngle(p2.x, p2.y);
-
-//    double a_min = std::min(a1, a2);
-//    double a_max = std::max(a1, a2);
-
-//    int i_min = lrf.getAngleUpperIndex(a_min);
-//    int i_max = lrf.getAngleUpperIndex(a_max);
-
-    int i_p1 = lrf.getAngleUpperIndex(p1.x, p1.y);
-    int i_p2 = lrf.getAngleUpperIndex(p2.x, p2.y);
-
-    int i_min = std::min(i_p1, i_p2);
-    int i_max = std::max(i_p1, i_p2);
-
-    geo::Vec2 s = p2 - p1;
-
-    // d = (q1 - ray_start) x s / (r x s)
-    //   = (q1 x s) / (r x s)
-
-//    std::cout << i_min << " " << i_max << std::endl;
-
-    if (i_min > lrf.i_left_ || i_max < lrf.i_right_)
-    {
-        // line is in front of sensor
-        for(int i = i_min; i < i_max; ++i)
-        {
-            const geo::Vector3& r = lrf.rayDirections()[i];
-            double d = (p1.x * s.y - p1.y * s.x) / (r.x * s.y - r.y * s.x);
-            if (d > 0 && (ranges[i] == 0 || d < ranges[i]))
-                ranges[i] = d;
-        }
-    }
-    else
-    {
-        // line is behind sensor
-        for(int i = 0; i < i_min; ++i)
-        {
-            const geo::Vector3& r = lrf.rayDirections()[i];
-            double d = (p1.x * s.y - p1.y * s.x) / (r.x * s.y - r.y * s.x);
-            if (d > 0 && (ranges[i] == 0 || d < ranges[i]))
-                ranges[i] = d;
-        }
-
-        for(int i = i_max; i < lrf.rayDirections().size(); ++i)
-        {
-            const geo::Vector3& r = lrf.rayDirections()[i];
-            double d = (p1.x * s.y - p1.y * s.x) / (r.x * s.y - r.y * s.x);
-            if (d > 0 && (ranges[i] == 0 || d < ranges[i]))
-                ranges[i] = d;
-        }
-    }
-}
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -243,9 +187,9 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             entities.push_back(it->second);
     }
 
-    geo::Pose3D laser_pose;
-    laser_pose.t = laser_pose_.t + geo::Vector3(0, 0, 0);
-    laser_pose.R.setRPY(0, 0, 0);
+    geo::Pose3D laser_pose(0, 0, 0.3);
+//    laser_pose.t = laser_pose_.t + geo::Vector3(0, 0, 0);
+//    laser_pose.R.setRPY(0, 0, 0);
 
     std::vector<geo::Vec2> lines_start;
     std::vector<geo::Vec2> lines_end;
@@ -290,7 +234,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             geo::Vec2 p2_t = T * p2;
 
             // Render the line as if seen by the sensor
-            renderLine(lrf_, p1_t, p2_t, model_ranges);
+            lrf_.renderLine(p1_t, p2_t, model_ranges);
         }
 
         double sum_sq_error = 0;
