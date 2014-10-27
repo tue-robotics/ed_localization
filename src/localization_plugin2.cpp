@@ -12,6 +12,9 @@
 
 #include <geolib/Shape.h>
 
+// Odometry
+#include <geolib/ros/msg_conversions.h>
+
 // ----------------------------------------------------------------------------------------------------
 
 class LineRenderResult : public geo::LaserRangeFinder::RenderResult
@@ -49,7 +52,7 @@ public:
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationPlugin::LocalizationPlugin() : pose_initialized_(false)
+LocalizationPlugin::LocalizationPlugin() : pose_initialized_(false), have_previous_pose_(false)
 {
 }
 
@@ -64,7 +67,7 @@ LocalizationPlugin::~LocalizationPlugin()
 void LocalizationPlugin::configure(tue::Configuration config)
 {
     std::string laser_topic;
-    config.value("laser_topic", laser_topic);
+    config.value("laser_topic", laser_topic);    
 
     if (config.hasError())
         return;
@@ -75,8 +78,17 @@ void LocalizationPlugin::configure(tue::Configuration config)
     ros::SubscribeOptions sub_options =
             ros::SubscribeOptions::create<sensor_msgs::LaserScan>(
                 laser_topic, 1, boost::bind(&LocalizationPlugin::laserCallback, this, _1), ros::VoidPtr(), &cb_queue_);
-
     sub_laser_ = nh.subscribe(sub_options);
+
+    std::string odom_topic;
+    if (config.value("odom_topic", odom_topic))
+    {
+        // Subscribe to odometry
+        ros::SubscribeOptions sub_odom_options =
+                ros::SubscribeOptions::create<nav_msgs::Odometry>(
+                    odom_topic, 1, boost::bind(&LocalizationPlugin::odomCallback, this, _1), ros::VoidPtr(), &cb_queue_);
+        sub_odom_ = nh.subscribe(sub_odom_options);
+    }
 
     a_current_ = 0;
     laser_pose_ = geo::Pose3D::identity();
@@ -93,14 +105,34 @@ void LocalizationPlugin::initialize()
 
 void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
 {
-    last_laser_msg_.reset();
+    laser_msg_.reset();
+    odom_msg_.reset();
     cb_queue_.callAvailable();
 
-    if (!last_laser_msg_)
+    if (!laser_msg_)
         return;
 
     tue::Timer timer;
     timer.start();
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Calculate delta movement based on odom
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if (odom_msg_)
+    {
+        geo::Pose3D new_pose;
+        geo::convert(odom_msg_->pose.pose, new_pose);
+
+        if (have_previous_pose_ && pose_initialized_)
+        {
+            geo::Pose3D delta = new_pose * previous_pose_.inverse();
+            best_laser_pose_ = delta * best_laser_pose_;
+        }
+
+        previous_pose_ = new_pose;
+        have_previous_pose_ = true;
+    }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Create samples
@@ -147,7 +179,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         }
     }
 
-    unsigned int num_beams = last_laser_msg_->ranges.size();
+    unsigned int num_beams = laser_msg_->ranges.size();
 //    if (poses.size() > 10000)
         num_beams = 100;  // limit to 100 beams
 
@@ -155,14 +187,14 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     // -     Update sensor model
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    int i_step = last_laser_msg_->ranges.size() / num_beams;
+    int i_step = laser_msg_->ranges.size() / num_beams;
     std::vector<double> sensor_ranges;
-    for (unsigned int i = 0; i < last_laser_msg_->ranges.size(); i += i_step)
+    for (unsigned int i = 0; i < laser_msg_->ranges.size(); i += i_step)
     {
-        double r = last_laser_msg_->ranges[i];
+        double r = laser_msg_->ranges[i];
 
         // Check for Inf
-        if (r != r || r > last_laser_msg_->range_max)
+        if (r != r || r > laser_msg_->range_max)
             r = 0;
         sensor_ranges.push_back(r);
     }
@@ -171,8 +203,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     if (lrf_.getNumBeams() != num_beams)
     {
         lrf_.setNumBeams(num_beams);
-        lrf_.setRangeLimits(last_laser_msg_->range_min, last_laser_msg_->range_max);
-        lrf_.setAngleLimits(last_laser_msg_->angle_min, last_laser_msg_->angle_max);
+        lrf_.setRangeLimits(laser_msg_->range_min, laser_msg_->range_max);
+        lrf_.setAngleLimits(laser_msg_->angle_min, laser_msg_->angle_max);
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -322,8 +354,16 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
 void LocalizationPlugin::laserCallback(const sensor_msgs::LaserScanConstPtr& msg)
 {
-    last_laser_msg_ = msg;
+    laser_msg_ = msg;
 }
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::odomCallback(const nav_msgs::OdometryConstPtr& msg)
+{
+    odom_msg_ = msg;
+}
+
 
 // ----------------------------------------------------------------------------------------------------
 
