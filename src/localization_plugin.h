@@ -12,10 +12,9 @@
 #include <sensor_msgs/LaserScan.h>
 #include <nav_msgs/Odometry.h>
 
-struct Sample
-{
-    geo::Pose3D pose;
-};
+#include "particle_filter.h"
+#include "odom_model.h"
+#include "laser_model.h"
 
 class LocalizationPlugin : public ed::Plugin
 {
@@ -37,16 +36,21 @@ private:
 
     bool pose_initialized_;
 
-    geo::Pose3D best_laser_pose_;
+    // PARTICLE FILTER
 
-    std::vector<Sample> samples_;
+    ParticleFilter particle_filter_;
+
+    // MODELS
+
+    LaserModel laser_model_;
+    OdomModel odom_model_;
 
     // RENDERING
 
     geo::LaserRangeFinder lrf_;
 
-    geo::Pose3D laser_pose_;
-    double a_current_;
+//    geo::Pose3D laser_pose_;
+//    double a_current_;
 
     // ROS
 

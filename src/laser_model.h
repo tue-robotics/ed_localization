@@ -28,6 +28,8 @@ private:
     double lambda_short;
     double range_max;
 
+    double laser_height_;
+
 };
 
 #endif

@@ -51,6 +51,8 @@ LaserModel::LaserModel()
     z_rand = 0.05;
     lambda_short = 0.1;
     range_max = 10;      // m
+
+    laser_height_ = 0.3;
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -75,7 +77,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
             entities.push_back(it->second);
     }
 
-    geo::Pose3D laser_pose(0, 0, 0.3);
+    geo::Pose3D laser_pose(0, 0, laser_height_);
 
     std::vector<geo::Vec2> lines_start;
     std::vector<geo::Vec2> lines_end;
@@ -92,14 +94,15 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Calculate sample updates
+    // -     Calculate sample weight updates
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+    double total_weight = 0;
 
     for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
     {
         Sample& sample = *it;
-        geo::Transform2 pose_inv = sample.pose.inverse();
+        geo::Transform2 pose_inv = sample.pose.matrix().inverse();
 
         // Calculate sensor model for this pose
         std::vector<double> model_ranges(sensor_ranges.size(), 0);
@@ -117,7 +120,6 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
             lrf.renderLine(p1_t, p2_t, model_ranges);
         }
 
-        double total_weight = 0;
         double p = 1;
 
         for(unsigned int i = 0; i < sensor_ranges.size(); ++i)
@@ -153,6 +155,22 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
 
         sample.weight *= p;
         total_weight += sample.weight;
+    }
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Normalize sample weights
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if (total_weight > 0)
+    {
+        for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
+            it->weight /= total_weight;
+    }
+    else
+    {
+        double uni_weight = 1.0 / pf.samples().size();
+        for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
+            it->weight = uni_weight;
     }
 }
 

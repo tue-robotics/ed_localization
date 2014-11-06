@@ -55,14 +55,9 @@ include_directories(
 )
 
 add_library(ed_localization_plugin
+    src/particle_filter.cpp
     src/localization_plugin2.cpp
+    src/laser_model.cpp
+    src/odom_model.cpp
 )
 # target_link_libraries(library_name ${catkin_LIBRARIES})
-
-# add_executable(exec_name
-#     src/source_file1.cpp
-#     ...
-# )
-# target_link_libraries(exec_name ${catkin_LIBRARIES})
-
-
