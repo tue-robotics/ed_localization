@@ -29,6 +29,7 @@ private:
     double range_max;
 
     double laser_height_;
+    geo::Transform2 laser_offset_;
 
 };
 

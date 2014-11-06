@@ -14,8 +14,9 @@
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationPlugin::LocalizationPlugin() : pose_initialized_(false), have_previous_pose_(false)
+LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false)
 {
+    particle_filter_.initUniform(geo::Vec2(-2, -2), geo::Vec2(2, 2), 0.2, 0.1);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -51,6 +52,8 @@ void LocalizationPlugin::configure(tue::Configuration config)
                     odom_topic, 1, boost::bind(&LocalizationPlugin::odomCallback, this, _1), ros::VoidPtr(), &cb_queue_);
         sub_odom_ = nh.subscribe(sub_odom_options);
     }
+
+    laser_offset_ = geo::Transform2(0.3, 0, 0);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -86,12 +89,16 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
         if (have_previous_pose_)
         {
-            geo::Pose3D delta = new_pose * previous_pose_.inverse();
+
+//            prev * delta = new_pose;
+
+            geo::Pose3D delta = previous_pose_.inverse() * new_pose;
 
             // Convert to 2D transformation
             geo::Transform2 delta_2d(geo::Mat2(delta.R.xx, delta.R.xy,
                                                delta.R.yx, delta.R.yy),
                                      geo::Vec2(delta.t.x, delta.t.y));
+
             movement.set(delta_2d);
         }
         else
@@ -132,20 +139,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     (Re)sample
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    if (!pose_initialized_)
-    {
-        // Uniform sampling over world
-        particle_filter_.initUniform(geo::Vec2(-5, -5), geo::Vec2(5, 5), 0.2, 0.1);
-    }
-    else
-    {
-        particle_filter_.resample(500);
-    }
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update motion
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -158,9 +151,16 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     laser_model_.updateWeights(world, lrf_, sensor_ranges, particle_filter_);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     (Re)sample
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    particle_filter_.resample(500);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Print profile statistics
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+    std::cout << "----------" << std::endl;
     std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
     std::cout << "Time per sample = " << timer.getElapsedTimeInMilliSec() / particle_filter_.samples().size() << " ms" << std::endl;
 
@@ -171,25 +171,29 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     bool visualize = true;
     if (visualize)
     {
-//        std::vector<geo::Vector3> sensor_points;
-//        lrf_.rangesToPoints(sensor_ranges, sensor_points);
+
 
         int grid_size = 800;
         double grid_resolution = 0.025;
 
         cv::Mat rgb_image(grid_size, grid_size, CV_8UC3, cv::Scalar(10, 10, 10));
 
-//        for(unsigned int i = 0; i < sensor_points.size(); ++i)
-//        {
-//            const geo::Vector3& p = best_laser_pose_ * sensor_points[i];
-//            int mx = -p.y / grid_resolution + grid_size / 2;
-//            int my = -p.x / grid_resolution + grid_size / 2;
+        std::vector<geo::Vector3> sensor_points;
+        lrf_.rangesToPoints(sensor_ranges, sensor_points);
 
-//            if (mx >= 0 && my >= 0 && mx < grid_size && my <grid_size)
-//            {
-//                rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
-//            }
-//        }
+        geo::Transform2 best_pose = particle_filter_.samples()[0].pose.matrix();
+        geo::Transform2 laser_pose = best_pose * laser_offset_;
+        for(unsigned int i = 0; i < sensor_points.size(); ++i)
+        {
+            const geo::Vec2& p = laser_pose * geo::Vec2(sensor_points[i].x, sensor_points[i].y);
+            int mx = -p.y / grid_resolution + grid_size / 2;
+            int my = -p.x / grid_resolution + grid_size / 2;
+
+            if (mx >= 0 && my >= 0 && mx < grid_size && my <grid_size)
+            {
+                rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
+            }
+        }
 
 
 //        for(unsigned int i = 0; i < lines_start.size(); ++i)
@@ -213,9 +217,9 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             // Visualize sensor
             int lmx = -pose.t.y / grid_resolution + grid_size / 2;
             int lmy = -pose.t.x / grid_resolution + grid_size / 2;
-//            cv::circle(rgb_image, cv::Point(lmx,lmy), 0.3 / grid_resolution, cv::Scalar(0, 0, 255), 1);
+            cv::circle(rgb_image, cv::Point(lmx,lmy), 0.1 / grid_resolution, cv::Scalar(0, 0, 255), 1);
 
-            geo::Vec2 d = pose.R * geo::Vec2(0.1, 0);
+            geo::Vec2 d = pose.R * geo::Vec2(0.2, 0);
             int dmx = -d.y / grid_resolution;
             int dmy = -d.x / grid_resolution;
             cv::line(rgb_image, cv::Point(lmx, lmy), cv::Point(lmx + dmx, lmy + dmy), cv::Scalar(0, 0, 255), 1);

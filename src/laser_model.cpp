@@ -53,6 +53,7 @@ LaserModel::LaserModel()
     range_max = 10;      // m
 
     laser_height_ = 0.3;
+    laser_offset_ = geo::Transform2(0.3, 0, 0);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -102,7 +103,11 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
     for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
     {
         Sample& sample = *it;
-        geo::Transform2 pose_inv = sample.pose.matrix().inverse();
+
+        geo::Transform2 laser_pose = sample.pose.matrix() * laser_offset_;
+        geo::Transform2 pose_inv = laser_pose.inverse();
+
+//        geo::Transform2 pose_inv = sample.pose.matrix().inverse();
 
         // Calculate sensor model for this pose
         std::vector<double> model_ranges(sensor_ranges.size(), 0);

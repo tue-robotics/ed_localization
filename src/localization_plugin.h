@@ -33,8 +33,7 @@ public:
 
 private:
 
-
-    bool pose_initialized_;
+    geo::Transform2 laser_offset_;
 
     // PARTICLE FILTER
 
