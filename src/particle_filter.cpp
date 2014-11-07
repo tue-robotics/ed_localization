@@ -29,6 +29,11 @@ void ParticleFilter::initUniform(const geo::Vec2& min, const geo::Vec2& max, dou
 
 // ----------------------------------------------------------------------------------------------------
 
+bool compareSamples(const Sample& a, const Sample& b)
+{
+    return a.weight > b.weight;
+}
+
 void ParticleFilter::resample(unsigned int num_samples)
 {
     std::vector<Sample>& old_samples = samples_[i_current_];
@@ -40,85 +45,50 @@ void ParticleFilter::resample(unsigned int num_samples)
     if (num_samples == 0)
         num_samples = old_samples.size();
 
+    // Sort all samples (decreasing weight)
+    std::sort(old_samples.begin(), old_samples.end(), compareSamples);
 
-    // -----------------------
+    int k = 0;
+    new_samples.resize(num_samples);
+    for(std::vector<Sample>::const_iterator it = old_samples.begin(); it != old_samples.end(); ++it)
+    {
+        const Sample& old_sample = *it;
 
-    Sample best_sample = bestSample();
+        int l = std::min<int>(k + 1 + old_sample.weight * num_samples, num_samples - 1);
+
+        for(int i = k; i <= l; ++i)
+            new_samples[i] = old_sample;
+
+        k = l + 1;
+
+        if (k >= num_samples)
+            break;
+    }
+
+//    // Build up cumulative probability table for resampling.
+//    std::vector<double> cum_weights(old_samples.size());
+//    cum_weights[0] = old_samples[0].weight;
+//    for(unsigned int i = 1; i < old_samples.size(); ++i)
+//        cum_weights[i] = cum_weights[i - 1] + old_samples[i].weight;
 
 //    new_samples.resize(num_samples);
 //    for(std::vector<Sample>::iterator it = new_samples.begin(); it != new_samples.end(); ++it)
-//        *it = best_sample;
-
-//    i_current_ = 1 - i_current_;
-
-//    return;
-
-    // -----------------------
-
-
-
-
-    // Build up cumulative probability table for resampling.
-    std::vector<double> cum_weights(old_samples.size());
-    cum_weights[0] = old_samples[0].weight;
-    for(unsigned int i = 1; i < old_samples.size(); ++i)
-        cum_weights[i] = cum_weights[i - 1] + old_samples[i].weight;
-
-    new_samples.resize(num_samples);
-    for(std::vector<Sample>::iterator it = new_samples.begin(); it != new_samples.end(); ++it)
-    {
-        Sample& new_sample = *it;
-
-        double r = ((double) rand() / (RAND_MAX));
-
-        unsigned int i_sample = 0;
-        for(i_sample = 0; i_sample < old_samples.size(); ++i_sample)
-        {
-            if (r < cum_weights[i_sample])
-                break;
-        }
-
-        new_sample = old_samples[i_sample];
-    }
-
-    new_samples[0] = best_sample;
-
-    int n = 0;
-    for(std::vector<Sample>::const_iterator it = new_samples.begin(); it != new_samples.end(); ++it)
-    {
-        const Sample& sample = *it;
-
-        if (std::abs(sample.weight - best_sample.weight) < 1e-6)
-        {
-            ++n;
-        }
-    }
-
-    std::cout << n << " / " << new_samples.size() << std::endl;
-
-//    double k = 0;
-//    new_samples.resize(num_samples);
-//    for(std::vector<Sample>::const_iterator it = old_samples.begin(); it != old_samples.end(); ++it)
 //    {
-//        const Sample& old_sample = *it;
+//        Sample& new_sample = *it;
 
-//        double l = old_sample.weight * num_samples;
+//        double r = ((double) rand() / (RAND_MAX));
 
-//        int i1 = k;
-
-//        k = k +l;
-//        int i2 = k;
-
-//        if (std::abs(old_sample.weight - best_sample.weight) < 1e-6)
+//        unsigned int i_sample = 0;
+//        for(i_sample = 0; i_sample < old_samples.size(); ++i_sample)
 //        {
-//            std::cout << old_sample.weight << ": " << i1 << " - " << i2 << std::endl;
+//            if (r < cum_weights[i_sample])
+//                break;
 //        }
 
-//        for(int i = i1; i < i2; ++i)
-//        {
-//            new_samples[i] = old_sample;
-//        }
+//        new_sample = old_samples[i_sample];
 //    }
+
+//    new_samples[0] = best_sample;
 
     i_current_ = 1 - i_current_;
 

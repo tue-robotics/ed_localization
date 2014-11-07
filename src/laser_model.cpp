@@ -107,8 +107,6 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
     // -     Calculate sample weight updates
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    Sample* best_sample = &pf.samples().front();
-
     for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
     {
         Sample& sample = *it;
@@ -117,8 +115,6 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
 
         geo::Transform2 laser_pose = sample.pose.matrix() * laser_offset_;
         geo::Transform2 pose_inv = laser_pose.inverse();
-
-        //        geo::Transform2 pose_inv = sample.pose.matrix().inverse();
 
         // Calculate sensor model for this pose
         std::vector<double> model_ranges(sensor_ranges.size(), 0);
@@ -144,15 +140,13 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
             double map_range = model_ranges[i];
 
             double z = obs_range - map_range;
-            double z_abs = std::abs(z);
-
-//            if (obs_range > 0 && map_range > 0 && std::abs(z) < 0.3)
-//                pz = exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
 
             double pz = 0;
 
             if (obs_range > 0 && map_range > 0)
             {
+                double z_abs = std::abs(z);
+
                 if (z_abs < 0.1)
                 {
                     pz = 1.0 / sensor_ranges.size();
@@ -177,27 +171,12 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
 //                pz += this->z_short * this->lambda_short * exp(-this->lambda_short*obs_range);
 
 //            // Part 3: Failure to detect obstacle, reported as max-range
-////            if(obs_range >= this->range_max || obs_range == 0)
 //            if(obs_range >= this->range_max)
 //                pz += this->z_max * 1.0;
 
 //            // Part 4: Random measurements
-////            if(obs_range > 0 && obs_range < this->range_max)
 //            if(obs_range < this->range_max)
 //                pz += this->z_rand * 1.0 / this->range_max;
-
-//            if (std::abs(z) > 0.3)
-//                z = 0.3;
-
-//            pz = z * z;
-
-
-//            if (pz > 1)
-//            {
-//                std::cout << "obs_range = " << obs_range << std::endl;
-//                std::cout << "map_range = " << map_range << std::endl;
-//            }
-
 
 //            assert(pz <= 1.0);
 //            assert(pz >= 0.0);
@@ -205,44 +184,10 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
             // here we have an ad-hoc weighting scheme for combining beam probs
             // works well, though...
 //            p += pz * pz * pz;
-
-//            if (obs_range > 0 && map_range > 0 && std::abs(z) < 0.3)
-//                p += (1.0 / sensor_ranges.size());
-
-//            p += pz;
-
-//            p += pz;
-
-//            p += pz * pz * pz;
         }
 
-//        p = 1.0 / p;
-
-//        std::cout << p << std::endl;
-
         sample.weight *= p;
-//        sample.weight *= (1 / p);
-
-        if (sample.weight > best_sample->weight)
-            best_sample = &sample;
     }
-
-//    std::cout << "Best weight: " << best_sample->weight << std::endl;
-
-//    for(unsigned int i = 0; i < pf.samples().size(); ++i)
-//    {
-//        Sample& sample = pf.samples()[i];
-
-//        if(&sample == best_sample)
-//        {
-//            sample.weight = 1;
-//            std::cout << "YES" << std::endl;
-//        }
-//        else
-//            sample.weight = 0;
-
-////        std::cout << i << ": " << sample.weight << std::endl;
-//    }
 
     pf.normalize();
 }
