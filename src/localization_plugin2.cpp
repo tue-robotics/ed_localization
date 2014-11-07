@@ -16,7 +16,7 @@
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false)
 {
-    particle_filter_.initUniform(geo::Vec2(-2, -2), geo::Vec2(2, 2), 0.2, 0.1);
+    particle_filter_.initUniform(geo::Vec2(-1, -5), geo::Vec2(8, 5), 0.2, 0.1);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -116,7 +116,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
     unsigned int num_beams = laser_msg_->ranges.size();
 //    if (poses.size() > 10000)
-        num_beams = 100;  // limit to 100 beams
+//        num_beams = 100;  // limit to 100 beams
 
     int i_step = laser_msg_->ranges.size() / num_beams;
     std::vector<double> sensor_ranges;
@@ -171,8 +171,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     bool visualize = true;
     if (visualize)
     {
-
-
         int grid_size = 800;
         double grid_resolution = 0.025;
 
@@ -181,7 +179,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         std::vector<geo::Vector3> sensor_points;
         lrf_.rangesToPoints(sensor_ranges, sensor_points);
 
-        geo::Transform2 best_pose = particle_filter_.samples()[0].pose.matrix();
+        geo::Transform2 best_pose = particle_filter_.bestSample().pose.matrix();
+
         geo::Transform2 laser_pose = best_pose * laser_offset_;
         for(unsigned int i = 0; i < sensor_points.size(); ++i)
         {
@@ -195,19 +194,21 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             }
         }
 
+        const std::vector<geo::Vec2>& lines_start = laser_model_.lines_start();
+        const std::vector<geo::Vec2>& lines_end = laser_model_.lines_end();
 
-//        for(unsigned int i = 0; i < lines_start.size(); ++i)
-//        {
-//            const geo::Vec2& p1 = lines_start[i];
-//            int mx1 = -p1.y / grid_resolution + grid_size / 2;
-//            int my1 = -p1.x / grid_resolution + grid_size / 2;
+        for(unsigned int i = 0; i < lines_start.size(); ++i)
+        {
+            const geo::Vec2& p1 = lines_start[i];
+            int mx1 = -p1.y / grid_resolution + grid_size / 2;
+            int my1 = -p1.x / grid_resolution + grid_size / 2;
 
-//            const geo::Vec2& p2 = lines_end[i];
-//            int mx2 = -p2.y / grid_resolution + grid_size / 2;
-//            int my2 = -p2.x / grid_resolution + grid_size / 2;
+            const geo::Vec2& p2 = lines_end[i];
+            int mx2 = -p2.y / grid_resolution + grid_size / 2;
+            int my2 = -p2.x / grid_resolution + grid_size / 2;
 
-//            cv::line(rgb_image, cv::Point(mx1, my1), cv::Point(mx2, my2), cv::Scalar(255, 255, 255), 1);
-//        }
+            cv::line(rgb_image, cv::Point(mx1, my1), cv::Point(mx2, my2), cv::Scalar(255, 255, 255), 1);
+        }
 
         const std::vector<Sample>& samples = particle_filter_.samples();
         for(std::vector<Sample>::const_iterator it = samples.begin(); it != samples.end(); ++it)

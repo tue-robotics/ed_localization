@@ -60,12 +60,16 @@ public:
 
     std::vector<Sample>& samples() { return samples_[i_current_]; }
 
+    const std::vector<Sample>& samples() const { return samples_[i_current_]; }
+
+    const Sample& bestSample() const;
+
+    void normalize();
+
 private:
 
     int i_current_;
     std::vector<Sample> samples_[2];
-
-    void normalize();
 
     void setUniformWeights();
 

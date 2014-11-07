@@ -8,29 +8,29 @@
 //   http://www.taygeta.com/random/gaussian.html
 double generateRandomGaussian(double sigma)
 {
-  double x1, x2, w, r;
+    double x1, x2, w, r;
 
-  do
-  {
-    do { r = drand48(); } while (r==0.0);
-    x1 = 2.0 * r - 1.0;
-    do { r = drand48(); } while (r==0.0);
-    x2 = 2.0 * r - 1.0;
-    w = x1*x1 + x2*x2;
-  } while(w > 1.0 || w==0.0);
+    do
+    {
+        do { r = drand48(); } while (r==0.0);
+        x1 = 2.0 * r - 1.0;
+        do { r = drand48(); } while (r==0.0);
+        x2 = 2.0 * r - 1.0;
+        w = x1*x1 + x2*x2;
+    } while(w > 1.0 || w==0.0);
 
-  return(sigma * x2 * sqrt(-2.0*log(w)/w));
+    return(sigma * x2 * sqrt(-2.0*log(w)/w));
 }
 
 // ----------------------------------------------------------------------------------------------------
 
 OdomModel::OdomModel()
 {
-    alpha1 = 0.2;
-    alpha2 = 0.2;
-    alpha3 = 0.2;
-    alpha4 = 0.2;
-    alpha5 = 0.2;
+    alpha1 = 0.5;
+    alpha2 = 0.5;
+    alpha3 = 0.5;
+    alpha4 = 0.5;
+    alpha5 = 0.5;
 }
 
 // ----------------------------------------------------------------------------------------------------

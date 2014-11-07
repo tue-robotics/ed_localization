@@ -40,6 +40,24 @@ void ParticleFilter::resample(unsigned int num_samples)
     if (num_samples == 0)
         num_samples = old_samples.size();
 
+
+    // -----------------------
+
+    Sample best_sample = bestSample();
+
+//    new_samples.resize(num_samples);
+//    for(std::vector<Sample>::iterator it = new_samples.begin(); it != new_samples.end(); ++it)
+//        *it = best_sample;
+
+//    i_current_ = 1 - i_current_;
+
+//    return;
+
+    // -----------------------
+
+
+
+
     // Build up cumulative probability table for resampling.
     std::vector<double> cum_weights(old_samples.size());
     cum_weights[0] = old_samples[0].weight;
@@ -51,7 +69,8 @@ void ParticleFilter::resample(unsigned int num_samples)
     {
         Sample& new_sample = *it;
 
-        double r = drand48();
+        double r = ((double) rand() / (RAND_MAX));
+
         unsigned int i_sample = 0;
         for(i_sample = 0; i_sample < old_samples.size(); ++i_sample)
         {
@@ -62,7 +81,65 @@ void ParticleFilter::resample(unsigned int num_samples)
         new_sample = old_samples[i_sample];
     }
 
+    new_samples[0] = best_sample;
+
+    int n = 0;
+    for(std::vector<Sample>::const_iterator it = new_samples.begin(); it != new_samples.end(); ++it)
+    {
+        const Sample& sample = *it;
+
+        if (std::abs(sample.weight - best_sample.weight) < 1e-6)
+        {
+            ++n;
+        }
+    }
+
+    std::cout << n << " / " << new_samples.size() << std::endl;
+
+//    double k = 0;
+//    new_samples.resize(num_samples);
+//    for(std::vector<Sample>::const_iterator it = old_samples.begin(); it != old_samples.end(); ++it)
+//    {
+//        const Sample& old_sample = *it;
+
+//        double l = old_sample.weight * num_samples;
+
+//        int i1 = k;
+
+//        k = k +l;
+//        int i2 = k;
+
+//        if (std::abs(old_sample.weight - best_sample.weight) < 1e-6)
+//        {
+//            std::cout << old_sample.weight << ": " << i1 << " - " << i2 << std::endl;
+//        }
+
+//        for(int i = i1; i < i2; ++i)
+//        {
+//            new_samples[i] = old_sample;
+//        }
+//    }
+
     i_current_ = 1 - i_current_;
+
+    normalize();
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+const Sample& ParticleFilter::bestSample() const
+{
+    const std::vector<Sample>& smpls = samples();
+
+    const Sample* best_sample = &smpls.front();
+    for(std::vector<Sample>::const_iterator it = smpls.begin(); it != smpls.end(); ++it)
+    {
+        const Sample& s = *it;
+        if (s.weight > best_sample->weight)
+            best_sample = &s;
+    }
+
+    return *best_sample;
 }
 
 // ----------------------------------------------------------------------------------------------------

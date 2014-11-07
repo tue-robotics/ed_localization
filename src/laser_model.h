@@ -18,6 +18,9 @@ public:
     void updateWeights(const ed::WorldModel& world, const geo::LaserRangeFinder& lrf,
                        const std::vector<double>& sensor_ranges, ParticleFilter& pf);
 
+    const std::vector<geo::Vec2>& lines_start() const { return lines_start_; }
+    const std::vector<geo::Vec2>& lines_end() const { return lines_end_; }
+
 private:
 
     double z_hit;
@@ -30,6 +33,10 @@ private:
 
     double laser_height_;
     geo::Transform2 laser_offset_;
+
+    // Visualization
+    std::vector<geo::Vec2> lines_start_;
+    std::vector<geo::Vec2> lines_end_;
 
 };
 
