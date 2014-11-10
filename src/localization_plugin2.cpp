@@ -109,6 +109,10 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         previous_pose_ = new_pose;
         have_previous_pose_ = true;
     }
+    else
+    {
+        movement.set(geo::Transform2::identity());
+    }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update world renderer
