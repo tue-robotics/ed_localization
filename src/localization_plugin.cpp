@@ -29,8 +29,21 @@ LocalizationPlugin::~LocalizationPlugin()
 
 void LocalizationPlugin::configure(tue::Configuration config)
 {
-    std::string laser_topic;
-    config.value("laser_topic", laser_topic);    
+    std::string laser_topic, odom_topic;
+
+    if (config.readGroup("odom_model", tue::REQUIRED))
+    {
+        config.value("topic", odom_topic);
+        odom_model_.configure(config);
+        config.endGroup();
+    }
+
+    if (config.readGroup("laser_model", tue::REQUIRED))
+    {
+        config.value("topic", laser_topic);
+        laser_model_.configure(config);
+        config.endGroup();
+    }
 
     if (config.hasError())
         return;
@@ -43,15 +56,12 @@ void LocalizationPlugin::configure(tue::Configuration config)
                 laser_topic, 1, boost::bind(&LocalizationPlugin::laserCallback, this, _1), ros::VoidPtr(), &cb_queue_);
     sub_laser_ = nh.subscribe(sub_options);
 
-    std::string odom_topic;
-    if (config.value("odom_topic", odom_topic))
-    {
-        // Subscribe to odometry
-        ros::SubscribeOptions sub_odom_options =
-                ros::SubscribeOptions::create<nav_msgs::Odometry>(
-                    odom_topic, 1, boost::bind(&LocalizationPlugin::odomCallback, this, _1), ros::VoidPtr(), &cb_queue_);
-        sub_odom_ = nh.subscribe(sub_odom_options);
-    }
+    // Subscribe to odometry
+    ros::SubscribeOptions sub_odom_options =
+            ros::SubscribeOptions::create<nav_msgs::Odometry>(
+                odom_topic, 1, boost::bind(&LocalizationPlugin::odomCallback, this, _1), ros::VoidPtr(), &cb_queue_);
+    sub_odom_ = nh.subscribe(sub_odom_options);
+
 
     laser_offset_ = geo::Transform2(0.3, 0, 0);
 }
@@ -115,34 +125,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Update world renderer
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    unsigned int num_beams = laser_msg_->ranges.size();
-//    if (poses.size() > 10000)
-//        num_beams = 100;  // limit to 100 beams
-
-    int i_step = laser_msg_->ranges.size() / num_beams;
-    std::vector<double> sensor_ranges;
-    for (unsigned int i = 0; i < laser_msg_->ranges.size(); i += i_step)
-    {
-        double r = laser_msg_->ranges[i];
-
-        // Check for Inf
-        if (r != r || r > laser_msg_->range_max)
-            r = 0;
-        sensor_ranges.push_back(r);
-    }
-    num_beams = sensor_ranges.size();
-
-    if (lrf_.getNumBeams() != num_beams)
-    {
-        lrf_.setNumBeams(num_beams);
-        lrf_.setRangeLimits(laser_msg_->range_min, laser_msg_->range_max);
-        lrf_.setAngleLimits(laser_msg_->angle_min, laser_msg_->angle_max);
-    }
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update motion
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -152,7 +134,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     // -     Update sensor
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    laser_model_.updateWeights(world, lrf_, sensor_ranges, particle_filter_);
+    laser_model_.updateWeights(world, *laser_msg_, particle_filter_);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     (Re)sample
@@ -181,7 +163,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         cv::Mat rgb_image(grid_size, grid_size, CV_8UC3, cv::Scalar(10, 10, 10));
 
         std::vector<geo::Vector3> sensor_points;
-        lrf_.rangesToPoints(sensor_ranges, sensor_points);
+        laser_model_.renderer().rangesToPoints(laser_model_.sensor_ranges(), sensor_points);
 
         geo::Transform2 best_pose = particle_filter_.bestSample().pose.matrix();
 

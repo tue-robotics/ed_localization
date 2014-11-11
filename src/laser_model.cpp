@@ -73,9 +73,44 @@ LaserModel::~LaserModel()
 
 // ----------------------------------------------------------------------------------------------------
 
-void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRangeFinder& lrf,
-                               const std::vector<double>& sensor_ranges, ParticleFilter& pf)
+void LaserModel::configure(tue::Configuration config)
 {
+    config.value("num_beams", num_beams);
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::LaserScan& scan, ParticleFilter& pf)
+{
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Update world renderer
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if (num_beams <= 0)
+        num_beams = scan.ranges.size();
+    else
+        num_beams = std::min<int>(scan.ranges.size(), num_beams);
+
+    int i_step = scan.ranges.size() / num_beams;
+    sensor_ranges_.clear();
+    for (unsigned int i = 0; i < scan.ranges.size(); i += i_step)
+    {
+        double r = scan.ranges[i];
+
+        // Check for Inf
+        if (r != r || r > scan.range_max)
+            r = 0;
+        sensor_ranges_.push_back(r);
+    }
+    num_beams = sensor_ranges_.size();
+
+    if (lrf_.getNumBeams() != num_beams)
+    {
+        lrf_.setNumBeams(num_beams);
+        lrf_.setRangeLimits(scan.range_min, scan.range_max);
+        lrf_.setAngleLimits(scan.angle_min, scan.angle_max);
+    }
+
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Create world model cross section
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -100,7 +135,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
         geo::LaserRangeFinder::RenderOptions options;
         geo::Transform t_inv = laser_pose.inverse() * e->pose();
         options.setMesh(e->shape()->getMesh(), t_inv);
-        lrf.render(options, render_result);
+        lrf_.render(options, render_result);
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -110,14 +145,12 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
     for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
     {
         Sample& sample = *it;
-
-//        sample.pose.set(geo::Transform2::identity());
-
+\
         geo::Transform2 laser_pose = sample.pose.matrix() * laser_offset_;
         geo::Transform2 pose_inv = laser_pose.inverse();
 
         // Calculate sensor model for this pose
-        std::vector<double> model_ranges(sensor_ranges.size(), 0);
+        std::vector<double> model_ranges(sensor_ranges_.size(), 0);
 
         for(unsigned int i = 0; i < lines_start_.size(); ++i)
         {
@@ -129,14 +162,14 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
             geo::Vec2 p2_t = pose_inv * p2;
 
             // Render the line as if seen by the sensor
-            lrf.renderLine(p1_t, p2_t, model_ranges);
+            lrf_.renderLine(p1_t, p2_t, model_ranges);
         }
 
         double p = 0;
 
-        for(unsigned int i = 0; i < sensor_ranges.size(); ++i)
+        for(unsigned int i = 0; i < sensor_ranges_.size(); ++i)
         {
-            double obs_range = sensor_ranges[i];
+            double obs_range = sensor_ranges_[i];
             double map_range = model_ranges[i];
 
             double z = obs_range - map_range;
@@ -149,15 +182,15 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const geo::LaserRang
 
                 if (z_abs < 0.1)
                 {
-                    pz = 1.0 / sensor_ranges.size();
+                    pz = 1.0 / sensor_ranges_.size();
                 }
                 else if (z_abs < 0.2)
                 {
-                    pz = 0.5 / sensor_ranges.size();
+                    pz = 0.5 / sensor_ranges_.size();
                 }
                 else if (z_abs < 0.3)
                 {
-                    pz = 0.25 / sensor_ranges.size();
+                    pz = 0.25 / sensor_ranges_.size();
                 }
             }
 

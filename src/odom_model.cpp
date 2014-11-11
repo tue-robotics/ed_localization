@@ -26,17 +26,28 @@ double generateRandomGaussian(double sigma)
 
 OdomModel::OdomModel()
 {
-    alpha1 = 0.5;
-    alpha2 = 0.5;
-    alpha3 = 0.5;
-    alpha4 = 0.5;
-    alpha5 = 0.5;
+    alpha1 = 0.2;
+    alpha2 = 0.2;
+    alpha3 = 0.2;
+    alpha4 = 0.2;
+    alpha5 = 0.2;
 }
 
 // ----------------------------------------------------------------------------------------------------
 
 OdomModel::~OdomModel()
 {
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void OdomModel::configure(tue::Configuration config)
+{
+    config.value("alpha1", alpha1);
+    config.value("alpha2", alpha2);
+    config.value("alpha3", alpha3);
+    config.value("alpha4", alpha4);
+    config.value("alpha5", alpha5);
 }
 
 // ----------------------------------------------------------------------------------------------------

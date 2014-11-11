@@ -44,10 +44,6 @@ private:
     LaserModel laser_model_;
     OdomModel odom_model_;
 
-    // RENDERING
-
-    geo::LaserRangeFinder lrf_;
-
 //    geo::Pose3D laser_pose_;
 //    double a_current_;
 

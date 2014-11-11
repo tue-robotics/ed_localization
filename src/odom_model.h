@@ -4,6 +4,8 @@
 #include "particle_filter.h"
 #include <geolib/datatypes.h>
 
+#include <tue/config/configuration.h>
+
 class OdomModel
 {
 
@@ -12,6 +14,8 @@ public:
     OdomModel();
 
     ~OdomModel();
+
+    void configure(tue::Configuration config);
 
     void updatePoses(const Transform& movement, double dt, ParticleFilter& pf);
 
