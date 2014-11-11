@@ -68,6 +68,23 @@ LaserModel::~LaserModel()
 void LaserModel::configure(tue::Configuration config)
 {
     config.value("num_beams", num_beams);
+
+    // Pre-calculate expensive operations
+    int resolution = 1000;
+
+    exp_hit_.resize(range_max * resolution + 1);
+    for(int i = 0; i < exp_hit_.size(); ++i)
+    {
+        double z = (double)i / resolution;
+        exp_hit_[i] = exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
+    }
+
+    exp_short_.resize(range_max * resolution + 1);
+    for(int i = 0; i < exp_hit_.size(); ++i)
+    {
+        double obs_range = (double)i / resolution;
+        exp_short_[i] = exp(-this->lambda_short * obs_range);
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -169,11 +186,13 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
             double pz = 0;
 
             // Part 1: good, but noisy, hit
-            pz += this->z_hit * exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
+//            pz += this->z_hit * exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
+            pz += this->z_hit * exp_hit_[std::min(std::abs(z), range_max) * 1000];
 
             // Part 2: short reading from unexpected obstacle (e.g., a person)
             if(z < 0)
-                pz += this->z_short * this->lambda_short * exp(-this->lambda_short*obs_range);
+//                pz += this->z_short * this->lambda_short * exp(-this->lambda_short*obs_range);
+                pz += this->z_short * this->lambda_short * exp_short_[std::min(obs_range, range_max) * 1000];
 
             // Part 3: Failure to detect obstacle, reported as max-range
             if(obs_range >= this->range_max)

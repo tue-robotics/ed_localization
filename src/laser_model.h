@@ -44,6 +44,9 @@ private:
 
     int num_beams;
 
+    // CACHING
+    std::vector<double> exp_hit_;
+    std::vector<double> exp_short_;
 
     // RENDERING
     geo::LaserRangeFinder lrf_;
