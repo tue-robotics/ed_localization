@@ -45,20 +45,12 @@ public:
 LaserModel::LaserModel()
 {
     // DEFAULT:
-//    z_hit = 0.95;
-//    sigma_hit = 0.2;
-//    z_short = 0.1;
-//    z_max = 0.05;
-//    z_rand = 0.05;
-//    lambda_short = 0.1;
-//    range_max = 10;      // m
-
-    z_hit = 1;
+    z_hit = 0.95;
     sigma_hit = 0.2;
-    z_short = 0;
-    z_max = 0;
-    z_rand = 0;
-    lambda_short = 0;
+    z_short = 0.1;
+    z_max = 0.05;
+    z_rand = 0.05;
+    lambda_short = 0.1;
     range_max = 10;      // m
 
     laser_height_ = 0.3;
@@ -165,7 +157,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
             lrf_.renderLine(p1_t, p2_t, model_ranges);
         }
 
-        double p = 0;
+        double p = 1;
 
         for(unsigned int i = 0; i < sensor_ranges_.size(); ++i)
         {
@@ -176,47 +168,28 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
 
             double pz = 0;
 
-            if (obs_range > 0 && map_range > 0)
-            {
-                double z_abs = std::abs(z);
+            // Part 1: good, but noisy, hit
+            pz += this->z_hit * exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
 
-                if (z_abs < 0.1)
-                {
-                    pz = 1.0 / sensor_ranges_.size();
-                }
-                else if (z_abs < 0.2)
-                {
-                    pz = 0.5 / sensor_ranges_.size();
-                }
-                else if (z_abs < 0.3)
-                {
-                    pz = 0.25 / sensor_ranges_.size();
-                }
-            }
+            // Part 2: short reading from unexpected obstacle (e.g., a person)
+            if(z < 0)
+                pz += this->z_short * this->lambda_short * exp(-this->lambda_short*obs_range);
 
-            p += pz;
+            // Part 3: Failure to detect obstacle, reported as max-range
+            if(obs_range >= this->range_max)
+                pz += this->z_max * 1.0;
 
-//            // Part 1: good, but noisy, hit
-//            pz += this->z_hit * exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
+            // Part 4: Random measurements
+            if(obs_range < this->range_max)
+                pz += this->z_rand * 1.0 / this->range_max;
 
-//            // Part 2: short reading from unexpected obstacle (e.g., a person)
-//            if(z < 0)
-//                pz += this->z_short * this->lambda_short * exp(-this->lambda_short*obs_range);
-
-//            // Part 3: Failure to detect obstacle, reported as max-range
-//            if(obs_range >= this->range_max)
-//                pz += this->z_max * 1.0;
-
-//            // Part 4: Random measurements
-//            if(obs_range < this->range_max)
-//                pz += this->z_rand * 1.0 / this->range_max;
-
-//            assert(pz <= 1.0);
-//            assert(pz >= 0.0);
+            assert(pz <= 1.0);
+            assert(pz >= 0.0);
 
             // here we have an ad-hoc weighting scheme for combining beam probs
             // works well, though...
-//            p += pz * pz * pz;
+            p += pz * pz * pz;
+
         }
 
         sample.weight *= p;
