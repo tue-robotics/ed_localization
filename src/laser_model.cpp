@@ -127,8 +127,8 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     std::vector<ed::EntityConstPtr> entities;
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
-        if (it->second->shape())
-            entities.push_back(it->second);
+        if ((*it)->shape())
+            entities.push_back(*it);
     }
 
     geo::Pose3D laser_pose(0, 0, laser_height_);
