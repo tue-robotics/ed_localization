@@ -3,6 +3,7 @@
 #include "particle_filter.h"
 #include <ed/world_model.h>
 #include <ed/entity.h>
+#include <ed/world_model/transform_crawler.h>
 #include <geolib/Shape.h>
 
 // ----------------------------------------------------------------------------------------------------
@@ -124,27 +125,19 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     // -     Create world model cross section
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    std::vector<ed::EntityConstPtr> entities;
-    for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
-    {
-        if ((*it)->shape())
-            entities.push_back(*it);
-    }
-
-    geo::Pose3D laser_pose(0, 0, laser_height_);
-
     lines_start_.clear();
     lines_end_.clear();
     LineRenderResult render_result(lines_start_, lines_end_);
 
-    for(std::vector<ed::EntityConstPtr>::const_iterator it = entities.begin(); it != entities.end(); ++it)
+    for(ed::world_model::TransformCrawler tc(world, scan.header.frame_id, scan.header.stamp.toSec()); tc.hasNext(); tc.next())
     {
-        const ed::EntityConstPtr& e = *it;
-
-        geo::LaserRangeFinder::RenderOptions options;
-        geo::Transform t_inv = laser_pose.inverse() * e->pose();
-        options.setMesh(e->shape()->getMesh(), t_inv);
-        lrf_.render(options, render_result);
+        const ed::EntityConstPtr& e = tc.entity();
+        if (e->shape())
+        {
+            geo::LaserRangeFinder::RenderOptions options;
+            options.setMesh(e->shape()->getMesh(), tc.transform());
+            lrf_.render(options, render_result);
+        }
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
