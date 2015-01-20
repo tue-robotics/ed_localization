@@ -11,10 +11,11 @@
 #include <tue/profiling/timer.h>
 
 #include <geolib/ros/msg_conversions.h>
+#include <geolib/ros/tf_conversions.h>
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false)
+LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), tf_listener_(), tf_broadcaster_(0)
 {
     particle_filter_.initUniform(geo::Vec2(-1, -5), geo::Vec2(8, 5), 0.2, 0.1);
 }
@@ -29,11 +30,14 @@ LocalizationPlugin::~LocalizationPlugin()
 
 void LocalizationPlugin::configure(tue::Configuration config)
 {
-    std::string laser_topic, odom_topic;
+    std::string laser_topic;
 
     if (config.readGroup("odom_model", tue::REQUIRED))
     {
-        config.value("topic", odom_topic);
+        config.value("map_frame", map_frame_id_);
+        config.value("odom_frame", odom_frame_id_);
+        config.value("base_link_frame", base_link_frame_id_);
+
         odom_model_.configure(config);
         config.endGroup();
     }
@@ -56,14 +60,12 @@ void LocalizationPlugin::configure(tue::Configuration config)
                 laser_topic, 1, boost::bind(&LocalizationPlugin::laserCallback, this, _1), ros::VoidPtr(), &cb_queue_);
     sub_laser_ = nh.subscribe(sub_options);
 
-    // Subscribe to odometry
-    ros::SubscribeOptions sub_odom_options =
-            ros::SubscribeOptions::create<nav_msgs::Odometry>(
-                odom_topic, 1, boost::bind(&LocalizationPlugin::odomCallback, this, _1), ros::VoidPtr(), &cb_queue_);
-    sub_odom_ = nh.subscribe(sub_odom_options);
 
+    delete tf_listener_;
+    tf_listener_ = new tf::TransformListener;
 
-    laser_offset_ = geo::Transform2(0.3, 0, 0);
+    delete tf_broadcaster_;
+    tf_broadcaster_ = new tf::TransformBroadcaster;
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -77,7 +79,6 @@ void LocalizationPlugin::initialize()
 void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
 {
     laser_msg_.reset();
-    odom_msg_.reset();
     cb_queue_.callAvailable();
 
     if (!laser_msg_)
@@ -87,22 +88,29 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     timer.start();
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Calculate delta movement based on odom
+    // -     Calculate delta movement based on odom (fetched from TF)
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+    if (!tf_listener_->waitForTransform(odom_frame_id_, base_link_frame_id_, laser_msg_->header.stamp, ros::Duration(1.0)))
+    {
+        ROS_WARN_STREAM("[ED LOCALIZATION] Cannot get transform from '" << odom_frame_id_ << "' to '" << base_link_frame_id_ << "'.");
+        return;
+    }
+
+    geo::Pose3D odom_to_base_link;
     Transform movement;
 
-    if (odom_msg_)
+    try
     {
-        geo::Pose3D new_pose;
-        geo::convert(odom_msg_->pose.pose, new_pose);
+        tf::StampedTransform odom_to_base_link_tf;
+
+        tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, laser_msg_->header.stamp, odom_to_base_link_tf);
+
+        geo::convert(odom_to_base_link_tf, odom_to_base_link);
 
         if (have_previous_pose_)
         {
-
-//            prev * delta = new_pose;
-
-            geo::Pose3D delta = previous_pose_.inverse() * new_pose;
+            geo::Pose3D delta = previous_pose_.inverse() * odom_to_base_link;
 
             // Convert to 2D transformation
             geo::Transform2 delta_2d(geo::Mat2(delta.R.xx, delta.R.xy,
@@ -116,11 +124,18 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             movement.set(geo::Transform2::identity());
         }
 
-        previous_pose_ = new_pose;
+        previous_pose_ = odom_to_base_link;
         have_previous_pose_ = true;
     }
-    else
+    catch (tf::TransformException e)
     {
+        std::cout << "[ED LOCALIZATION] " << e.what() << std::endl;
+
+        if (!have_previous_pose_)
+            return;
+
+        odom_to_base_link = previous_pose_;
+
         movement.set(geo::Transform2::identity());
     }
 
@@ -143,18 +158,46 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     particle_filter_.resample(500);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Publish result
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    // Get the best pose (2D)
+    geo::Transform2 p = particle_filter_.bestSample().pose.matrix();
+
+    // Convert best pose to 3D
+    geo::Pose3D map_to_base_link;
+    map_to_base_link.t = geo::Vector3(p.t.x, p.t.y, 0);
+    map_to_base_link.R = geo::Matrix3(p.R.xx, p.R.xy, 0,
+                                      p.R.yx, p.R.yy, 0,
+                                      0     , 0     , 1);
+
+    geo::Pose3D map_to_odom = map_to_base_link * odom_to_base_link.inverse();
+
+    // Convert to TF transform
+    tf::StampedTransform map_to_odom_tf;
+    geo::convert(map_to_odom, map_to_odom_tf);
+
+    // Set frame id's and time stamp
+    map_to_odom_tf.frame_id_ = map_frame_id_;
+    map_to_odom_tf.child_frame_id_ = odom_frame_id_;
+    map_to_odom_tf.stamp_ = laser_msg_->header.stamp;
+
+    // Publish TF
+    tf_broadcaster_->sendTransform(map_to_odom_tf);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Print profile statistics
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    std::cout << "----------" << std::endl;
-    std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
-    std::cout << "Time per sample = " << timer.getElapsedTimeInMilliSec() / particle_filter_.samples().size() << " ms" << std::endl;
+//    std::cout << "----------" << std::endl;
+//    std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
+//    std::cout << "Time per sample = " << timer.getElapsedTimeInMilliSec() / particle_filter_.samples().size() << " ms" << std::endl;
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Visualization
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    bool visualize = true;
+    bool visualize = false;
     if (visualize)
     {
         int grid_size = 800;
@@ -167,7 +210,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
         geo::Transform2 best_pose = particle_filter_.bestSample().pose.matrix();
 
-        geo::Transform2 laser_pose = best_pose * laser_offset_;
+        geo::Transform2 laser_pose = best_pose * laser_model_.laser_offset();
         for(unsigned int i = 0; i < sensor_points.size(); ++i)
         {
             const geo::Vec2& p = laser_pose * geo::Vec2(sensor_points[i].x, sensor_points[i].y);
@@ -223,14 +266,6 @@ void LocalizationPlugin::laserCallback(const sensor_msgs::LaserScanConstPtr& msg
 {
     laser_msg_ = msg;
 }
-
-// ----------------------------------------------------------------------------------------------------
-
-void LocalizationPlugin::odomCallback(const nav_msgs::OdometryConstPtr& msg)
-{
-    odom_msg_ = msg;
-}
-
 
 // ----------------------------------------------------------------------------------------------------
 

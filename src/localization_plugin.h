@@ -12,6 +12,11 @@
 #include <sensor_msgs/LaserScan.h>
 #include <nav_msgs/Odometry.h>
 
+// TF
+#include <tf/transform_listener.h>
+#include <tf/transform_broadcaster.h>
+
+// MODELS
 #include "particle_filter.h"
 #include "odom_model.h"
 #include "laser_model.h"
@@ -33,19 +38,16 @@ public:
 
 private:
 
-    geo::Transform2 laser_offset_;
-
     // PARTICLE FILTER
 
     ParticleFilter particle_filter_;
+
 
     // MODELS
 
     LaserModel laser_model_;
     OdomModel odom_model_;
 
-//    geo::Pose3D laser_pose_;
-//    double a_current_;
 
     // ROS
 
@@ -57,14 +59,18 @@ private:
 
     void laserCallback(const sensor_msgs::LaserScanConstPtr& msg);
 
-    ros::Subscriber sub_odom_;
-
-    nav_msgs::OdometryConstPtr odom_msg_;
-
     bool have_previous_pose_;
     geo::Pose3D previous_pose_;
 
-    void odomCallback(const nav_msgs::OdometryConstPtr& msg);
+
+    // TF
+
+    std::string map_frame_id_;
+    std::string odom_frame_id_;
+    std::string base_link_frame_id_;
+
+    tf::TransformListener* tf_listener_;
+    tf::TransformBroadcaster* tf_broadcaster_;
 
 };
 

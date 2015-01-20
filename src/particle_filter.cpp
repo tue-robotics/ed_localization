@@ -34,6 +34,8 @@ bool compareSamples(const Sample& a, const Sample& b)
     return a.weight > b.weight;
 }
 
+// ----------------------------------------------------------------------------------------------------
+
 void ParticleFilter::resample(unsigned int num_samples)
 {
     std::vector<Sample>& old_samples = samples_[i_current_];

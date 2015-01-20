@@ -14,18 +14,12 @@ public:
 
     LineRenderResult(std::vector<geo::Vec2>& lines_start, std::vector<geo::Vec2>& lines_end)
         : geo::LaserRangeFinder::RenderResult(dummy_ranges_),
-          lines_start_(lines_start), lines_end_(lines_end), p_min(1e9), p_max(-1e9) {}
+          lines_start_(lines_start), lines_end_(lines_end) {}
 
     void renderLine(const geo::Vec2& p1, const geo::Vec2& p2)
     {
         lines_start_.push_back(p1);
         lines_end_.push_back(p2);
-
-        p_min.x = std::min(p_min.x, std::min(p1.x, p2.x));
-        p_max.x = std::max(p_max.x, std::max(p1.x, p2.x));
-
-        p_min.y = std::min(p_min.y, std::min(p1.y, p2.y));
-        p_max.y = std::max(p_max.y, std::max(p1.y, p2.y));
     }
 
 private:
@@ -33,10 +27,6 @@ private:
     std::vector<double> dummy_ranges_;
     std::vector<geo::Vec2>& lines_start_;
     std::vector<geo::Vec2>& lines_end_;
-
-public:
-
-    geo::Vec2 p_min, p_max;
 
 };
 
@@ -69,8 +59,29 @@ void LaserModel::configure(tue::Configuration config)
 {
     config.value("num_beams", num_beams);
 
+    if (config.readGroup("laser_pose", tue::REQUIRED))
+    {
+        double x, y, rz;
+        config.value("x", x);
+        config.value("y", y);
+        config.value("rz", rz);
+        laser_offset_ = geo::Transform2(x, y, rz);
+
+        config.value("z", laser_height_);
+
+        config.endGroup();
+    }
+
+    config.value("z_hit", z_hit);
+    config.value("sigma_hit", sigma_hit);
+    config.value("z_short", z_short);
+    config.value("z_max", z_max);
+    config.value("z_rand", z_rand);
+    config.value("lambda_short", lambda_short);
+    config.value("range_max", range_max);
+
     // Pre-calculate expensive operations
-    int resolution = 1000;
+    int resolution = 1000; // mm accuracy
 
     exp_hit_.resize(range_max * resolution + 1);
     for(int i = 0; i < exp_hit_.size(); ++i)
@@ -202,8 +213,15 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
             if(obs_range < this->range_max)
                 pz += this->z_rand * 1.0 / this->range_max;
 
-            assert(pz <= 1.0);
-            assert(pz >= 0.0);
+            if (pz > 1)
+            {
+                std::cout << "[ED LOCALIZATION] Warning: pz > 1 (pz = " << pz << ")" << std::endl;
+                std::cout << "    obs_range = " << obs_range << ", map_range = " << map_range << std::endl;
+                std::cout << "    hit   = " << this->z_hit * exp_hit_[std::min(std::abs(z), range_max) * 1000] << std::endl;
+                std::cout << "    short = " << this->z_short * this->lambda_short * exp_short_[std::min(obs_range, range_max) * 1000] << std::endl;
+                std::cout << "    max   = " << this->z_max * 1.0 << std::endl;
+                std::cout << "    rand  = " << this->z_rand * 1.0 / this->range_max << std::endl;
+            }
 
             // here we have an ad-hoc weighting scheme for combining beam probs
             // works well, though...

@@ -29,6 +29,8 @@ public:
     const geo::LaserRangeFinder& renderer() const { return lrf_; }
     const std::vector<double>& sensor_ranges() const { return sensor_ranges_; }
 
+    const geo::Transform2& laser_offset() const { return laser_offset_; }
+
 private:
 
     double z_hit;
