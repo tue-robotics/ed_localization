@@ -60,7 +60,8 @@ public:
 
     ~ParticleFilter();
 
-    void initUniform(const geo::Vec2& min, const geo::Vec2& max, double t_step, double a_step);
+    void initUniform(const geo::Vec2& min, const geo::Vec2& max, double t_step,
+                     double a_min, double a_max, double a_step);
 
     void resample(unsigned int num_samples = 0);
 

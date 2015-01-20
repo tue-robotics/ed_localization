@@ -17,7 +17,7 @@
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), tf_listener_(), tf_broadcaster_(0)
 {
-    particle_filter_.initUniform(geo::Vec2(-1, -5), geo::Vec2(8, 5), 0.2, 0.1);
+    particle_filter_.initUniform(geo::Vec2(-1, -5), geo::Vec2(8, 5), 0.2, 0, 2 * M_PI, 0.1);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -60,6 +60,16 @@ void LocalizationPlugin::configure(tue::Configuration config)
                 laser_topic, 1, boost::bind(&LocalizationPlugin::laserCallback, this, _1), ros::VoidPtr(), &cb_queue_);
     sub_laser_ = nh.subscribe(sub_options);
 
+    std::string initial_pose_topic;
+    if (config.value("initial_pose_topic", initial_pose_topic, tue::OPTIONAL))
+    {
+        // Subscribe to initial pose topic
+
+        ros::SubscribeOptions sub_opts =
+                ros::SubscribeOptions::create<geometry_msgs::PoseWithCovarianceStamped>(
+                    initial_pose_topic, 1, boost::bind(&LocalizationPlugin::initialPoseCallback, this, _1), ros::VoidPtr(), &cb_queue_);
+        sub_initial_pose_ = nh.subscribe(sub_opts);
+    }
 
     delete tf_listener_;
     tf_listener_ = new tf::TransformListener;
@@ -79,7 +89,20 @@ void LocalizationPlugin::initialize()
 void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
 {
     laser_msg_.reset();
+    initial_pose_msg_.reset();
     cb_queue_.callAvailable();
+
+    if (initial_pose_msg_)
+    {
+        // Set initial pose
+
+        geo::Vec2 p(initial_pose_msg_->pose.pose.position.x, initial_pose_msg_->pose.pose.position.y);
+
+        double yaw = tf::getYaw(initial_pose_msg_->pose.pose.orientation);
+
+        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
+                                     yaw - 0.1, yaw + 0.1, 0.05);
+    }
 
     if (!laser_msg_)
         return;
@@ -265,6 +288,13 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 void LocalizationPlugin::laserCallback(const sensor_msgs::LaserScanConstPtr& msg)
 {
     laser_msg_ = msg;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg)
+{
+    initial_pose_msg_ = msg;
 }
 
 // ----------------------------------------------------------------------------------------------------

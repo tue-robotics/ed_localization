@@ -10,7 +10,7 @@
 #include <ros/subscriber.h>
 #include <ros/callback_queue.h>
 #include <sensor_msgs/LaserScan.h>
-#include <nav_msgs/Odometry.h>
+#include <geometry_msgs/PoseWithCovarianceStamped.h>
 
 // TF
 #include <tf/transform_listener.h>
@@ -61,6 +61,12 @@ private:
 
     bool have_previous_pose_;
     geo::Pose3D previous_pose_;
+
+    ros::Subscriber sub_initial_pose_;
+
+    geometry_msgs::PoseWithCovarianceStampedConstPtr initial_pose_msg_;
+
+    void initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg);
 
 
     // TF

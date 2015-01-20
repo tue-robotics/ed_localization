@@ -14,14 +14,15 @@ ParticleFilter::~ParticleFilter()
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::initUniform(const geo::Vec2& min, const geo::Vec2& max, double t_step, double a_step)
+void ParticleFilter::initUniform(const geo::Vec2& min, const geo::Vec2& max, double t_step,
+                                 double a_min, double a_max, double a_step)
 {
     std::vector<Sample>& smpls = samples();
 
     smpls.clear();
     for(double x = min.x; x < max.x; x += t_step)
         for(double y = min.y; y < max.y; y += t_step)
-            for(double a = 0; a < 2 * M_PI; a += a_step)
+            for(double a = a_min; a < a_max; a += a_step)
                 smpls.push_back(Sample(geo::Transform2(x, y, a)));
 
     setUniformWeights();
