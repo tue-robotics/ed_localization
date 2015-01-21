@@ -17,7 +17,6 @@
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), tf_listener_(), tf_broadcaster_(0)
 {
-    particle_filter_.initUniform(geo::Vec2(-1, -5), geo::Vec2(8, 5), 0.2, 0, 2 * M_PI, 0.1);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -161,6 +160,13 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
         movement.set(geo::Transform2::identity());
     }
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Check if particle filter is initialized
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if (particle_filter_.samples().empty())
+        return;
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update motion
