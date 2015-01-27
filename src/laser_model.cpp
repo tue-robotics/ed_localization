@@ -213,15 +213,15 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
             if(obs_range < this->range_max)
                 pz += this->z_rand * 1.0 / this->range_max;
 
-            if (pz > 1)
-            {
-                std::cout << "[ED LOCALIZATION] Warning: pz > 1 (pz = " << pz << ")" << std::endl;
-                std::cout << "    obs_range = " << obs_range << ", map_range = " << map_range << std::endl;
-                std::cout << "    hit   = " << this->z_hit * exp_hit_[std::min(std::abs(z), range_max) * 1000] << std::endl;
-                std::cout << "    short = " << this->z_short * this->lambda_short * exp_short_[std::min(obs_range, range_max) * 1000] << std::endl;
-                std::cout << "    max   = " << this->z_max * 1.0 << std::endl;
-                std::cout << "    rand  = " << this->z_rand * 1.0 / this->range_max << std::endl;
-            }
+//            if (pz > 1)
+//            {
+//                std::cout << "[ED LOCALIZATION] Warning: pz > 1 (pz = " << pz << ")" << std::endl;
+//                std::cout << "    obs_range = " << obs_range << ", map_range = " << map_range << std::endl;
+//                std::cout << "    hit   = " << this->z_hit * exp_hit_[std::min(std::abs(z), range_max) * 1000] << std::endl;
+//                std::cout << "    short = " << this->z_short * this->lambda_short * exp_short_[std::min(obs_range, range_max) * 1000] << std::endl;
+//                std::cout << "    max   = " << this->z_max * 1.0 << std::endl;
+//                std::cout << "    rand  = " << this->z_rand * 1.0 / this->range_max << std::endl;
+//            }
 
             // here we have an ad-hoc weighting scheme for combining beam probs
             // works well, though...
