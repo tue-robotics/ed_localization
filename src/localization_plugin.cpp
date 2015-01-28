@@ -48,6 +48,8 @@ void LocalizationPlugin::configure(tue::Configuration config)
         config.endGroup();
     }
 
+    config.value("num_particles", num_particles_);
+
     if (config.hasError())
         return;
 
@@ -105,9 +107,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
     if (!laser_msg_)
         return;
-
-    tue::Timer timer;
-    timer.start();
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Calculate delta movement based on odom (fetched from TF)
@@ -178,13 +177,21 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     // -     Update sensor
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+//    tue::Timer timer;
+//    timer.start();
+
     laser_model_.updateWeights(world, *laser_msg_, particle_filter_);
+
+//    std::cout << "----------" << std::endl;
+//    std::cout << "Number of lines = " << laser_model_.lines_start().size() << std::endl;
+//    std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
+//    std::cout << "Time per sample = " << timer.getElapsedTimeInMilliSec() / particle_filter_.samples().size() << " ms" << std::endl;
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     (Re)sample
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    particle_filter_.resample(500);
+    particle_filter_.resample(num_particles_);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Publish result
@@ -215,14 +222,6 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     tf_broadcaster_->sendTransform(map_to_odom_tf);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Print profile statistics
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-//    std::cout << "----------" << std::endl;
-//    std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
-//    std::cout << "Time per sample = " << timer.getElapsedTimeInMilliSec() / particle_filter_.samples().size() << " ms" << std::endl;
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Visualization
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -243,8 +242,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         for(unsigned int i = 0; i < sensor_points.size(); ++i)
         {
             const geo::Vec2& p = laser_pose * geo::Vec2(sensor_points[i].x, sensor_points[i].y);
-            int mx = -p.y / grid_resolution + grid_size / 2;
-            int my = -p.x / grid_resolution + grid_size / 2;
+            int mx = -(p.y - best_pose.t.y) / grid_resolution + grid_size / 2;
+            int my = -(p.x - best_pose.t.x) / grid_resolution + grid_size / 2;
 
             if (mx >= 0 && my >= 0 && mx < grid_size && my <grid_size)
             {
@@ -258,12 +257,12 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         for(unsigned int i = 0; i < lines_start.size(); ++i)
         {
             const geo::Vec2& p1 = lines_start[i];
-            int mx1 = -p1.y / grid_resolution + grid_size / 2;
-            int my1 = -p1.x / grid_resolution + grid_size / 2;
+            int mx1 = -(p1.y - best_pose.t.y) / grid_resolution + grid_size / 2;
+            int my1 = -(p1.x - best_pose.t.x) / grid_resolution + grid_size / 2;
 
             const geo::Vec2& p2 = lines_end[i];
-            int mx2 = -p2.y / grid_resolution + grid_size / 2;
-            int my2 = -p2.x / grid_resolution + grid_size / 2;
+            int mx2 = -(p2.y - best_pose.t.y) / grid_resolution + grid_size / 2;
+            int my2 = -(p2.x - best_pose.t.x) / grid_resolution + grid_size / 2;
 
             cv::line(rgb_image, cv::Point(mx1, my1), cv::Point(mx2, my2), cv::Scalar(255, 255, 255), 1);
         }
@@ -274,8 +273,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
             const geo::Transform2& pose = it->pose.matrix();
 
             // Visualize sensor
-            int lmx = -pose.t.y / grid_resolution + grid_size / 2;
-            int lmy = -pose.t.x / grid_resolution + grid_size / 2;
+            int lmx = -(pose.t.y - best_pose.t.y) / grid_resolution + grid_size / 2;
+            int lmy = -(pose.t.x - best_pose.t.x) / grid_resolution + grid_size / 2;
             cv::circle(rgb_image, cv::Point(lmx,lmy), 0.1 / grid_resolution, cv::Scalar(0, 0, 255), 1);
 
             geo::Vec2 d = pose.R * geo::Vec2(0.2, 0);

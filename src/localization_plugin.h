@@ -40,6 +40,8 @@ private:
 
     // PARTICLE FILTER
 
+    int num_particles_;
+
     ParticleFilter particle_filter_;
 
 

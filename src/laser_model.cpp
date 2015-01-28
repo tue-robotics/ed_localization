@@ -12,12 +12,32 @@ class LineRenderResult : public geo::LaserRangeFinder::RenderResult
 
 public:
 
-    LineRenderResult(std::vector<geo::Vec2>& lines_start, std::vector<geo::Vec2>& lines_end)
+    LineRenderResult(std::vector<geo::Vec2>& lines_start, std::vector<geo::Vec2>& lines_end, double max_distance)
         : geo::LaserRangeFinder::RenderResult(dummy_ranges_),
-          lines_start_(lines_start), lines_end_(lines_end) {}
+          lines_start_(lines_start), lines_end_(lines_end), max_distance_sq_(max_distance * max_distance) {}
 
     void renderLine(const geo::Vec2& p1, const geo::Vec2& p2)
     {
+        // Calculate distance to the line
+
+        geo::Vec2 diff = p2 - p1;
+        double line_length_sq = diff.length2();
+
+        double t = p1.dot(diff) / -line_length_sq;
+
+        double distance_sq;
+
+        if (t < 0)
+            distance_sq = p1.length2();
+        else if (t > 1)
+            distance_sq = p2.length2();
+        else
+            distance_sq = (p1 + t * diff).length2();
+
+        // If too far, skip
+        if (distance_sq > max_distance_sq_)
+            return;
+
         lines_start_.push_back(p1);
         lines_end_.push_back(p2);
     }
@@ -27,6 +47,7 @@ private:
     std::vector<double> dummy_ranges_;
     std::vector<geo::Vec2>& lines_start_;
     std::vector<geo::Vec2>& lines_end_;
+    double max_distance_sq_;
 
 };
 
@@ -127,40 +148,77 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     if (lrf_.getNumBeams() != num_beams)
     {
         lrf_.setNumBeams(num_beams);
-        lrf_.setRangeLimits(scan.range_min, scan.range_max);
         lrf_.setAngleLimits(scan.angle_min, scan.angle_max);
+        range_max = std::min<double>(range_max, scan.range_max);
     }
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Determine center and maximum range of world model cross section
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    // Find the bounding rectangle around all sample poses. This will be used to determine
+    // the largest render distance (anything max_range beyond the sample boundaries does
+    // not have to be considered)
+
+    geo::Vec2 sample_min(1e9, 1e9);
+    geo::Vec2 sample_max(-1e9, -1e9);
+    for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
+    {
+        Sample& sample = *it;
+
+        geo::Transform2 laser_pose = sample.pose.matrix() * laser_offset_;
+
+        sample_min.x = std::min(sample_min.x, laser_pose.t.x);
+        sample_min.y = std::min(sample_min.y, laser_pose.t.y);
+        sample_max.x = std::max(sample_min.x, laser_pose.t.x);
+        sample_max.y = std::max(sample_min.y, laser_pose.t.y);
+    }
+
+    // Calculate the sample boundary center and boundary render distance
+    geo::Vec2 sample_center = (sample_min + sample_max) / 2;
+    double max_distance = (sample_max - sample_min).length() / 2 + range_max;
+
+    // Set the range limit to the lrf renderer. This will make sure all shapes that
+    // are too far away will not be rendered (object selection, not line selection)
+    lrf_.setRangeLimits(scan.range_min, max_distance);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Create world model cross section
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    std::vector<ed::EntityConstPtr> entities;
-    for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
-    {
-        if ((*it)->shape())
-            entities.push_back(*it);
-    }
-
-    geo::Pose3D laser_pose(0, 0, laser_height_);
+    geo::Pose3D laser_pose(sample_center.x, sample_center.y, laser_height_);
 
     lines_start_.clear();
     lines_end_.clear();
-    LineRenderResult render_result(lines_start_, lines_end_);
 
-    for(std::vector<ed::EntityConstPtr>::const_iterator it = entities.begin(); it != entities.end(); ++it)
+    // Give the max_distance also to the line renderer. It will discard all LINES that
+    // are further away. Note that this is an even finer selection than the default
+    // object selection that is done by the lrf renderer.
+    LineRenderResult render_result(lines_start_, lines_end_, max_distance);
+
+    for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
         const ed::EntityConstPtr& e = *it;
+        if (e->shape())
+        {
+            geo::LaserRangeFinder::RenderOptions options;
+            geo::Transform t_inv = laser_pose.inverse() * e->pose();
+            options.setMesh(e->shape()->getMesh(), t_inv);
+            lrf_.render(options, render_result);
+        }
+    }
 
-        geo::LaserRangeFinder::RenderOptions options;
-        geo::Transform t_inv = laser_pose.inverse() * e->pose();
-        options.setMesh(e->shape()->getMesh(), t_inv);
-        lrf_.render(options, render_result);
+    for(unsigned int i = 0; i < lines_start_.size(); ++i)
+    {
+        lines_start_[i] += sample_center;
+        lines_end_[i] += sample_center;
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Calculate sample weight updates
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    lrf_.setRangeLimits(scan.range_min, max_distance);
 
     for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
     {
