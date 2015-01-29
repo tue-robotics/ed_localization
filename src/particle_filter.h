@@ -71,6 +71,8 @@ public:
 
     const Sample& bestSample() const;
 
+    geo::Transform2 calculateMeanPose() const;
+
     void normalize();
 
 private:

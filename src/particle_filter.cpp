@@ -117,6 +117,34 @@ const Sample& ParticleFilter::bestSample() const
 
 // ----------------------------------------------------------------------------------------------------
 
+// TODO: deal with particle clusters (taking the average of multiple clusters of particles does not make sense)
+geo::Transform2 ParticleFilter::calculateMeanPose() const
+{
+    const std::vector<Sample>& smpls = samples();
+
+    geo::Transform2 mean;
+    mean.t = geo::Vec2(0, 0);
+    geo::Vec2 rot_v(0, 0);
+
+    for(std::vector<Sample>::const_iterator it = smpls.begin(); it != smpls.end(); ++it)
+    {
+        const Sample& s = *it;
+        mean.t += s.weight * s.pose.matrix().t;
+        rot_v.x += s.weight * s.pose.matrix().R.xx;
+        rot_v.y += s.weight * s.pose.matrix().R.yx;
+    }
+
+    rot_v.normalize();
+    mean.R.xx = rot_v.x;
+    mean.R.yx = rot_v.y;
+    mean.R.xy = -mean.R.yx;
+    mean.R.yy = mean.R.xx;
+
+    return mean;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
 void ParticleFilter::normalize()
 {
     std::vector<Sample>& smpls = samples();

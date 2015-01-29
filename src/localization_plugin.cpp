@@ -202,13 +202,13 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // Get the best pose (2D)
-    geo::Transform2 p = particle_filter_.bestSample().pose.matrix();
+    geo::Transform2 mean_pose = particle_filter_.calculateMeanPose();
 
     // Convert best pose to 3D
     geo::Pose3D map_to_base_link;
-    map_to_base_link.t = geo::Vector3(p.t.x, p.t.y, 0);
-    map_to_base_link.R = geo::Matrix3(p.R.xx, p.R.xy, 0,
-                                      p.R.yx, p.R.yy, 0,
+    map_to_base_link.t = geo::Vector3(mean_pose.t.x, mean_pose.t.y, 0);
+    map_to_base_link.R = geo::Matrix3(mean_pose.R.xx, mean_pose.R.xy, 0,
+                                      mean_pose.R.yx, mean_pose.R.yy, 0,
                                       0     , 0     , 1);
 
     geo::Pose3D map_to_odom = map_to_base_link * odom_to_base_link.inverse();
@@ -265,7 +265,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         std::vector<geo::Vector3> sensor_points;
         laser_model_.renderer().rangesToPoints(laser_model_.sensor_ranges(), sensor_points);
 
-        geo::Transform2 best_pose = particle_filter_.bestSample().pose.matrix();
+        geo::Transform2 best_pose = mean_pose;
 
         geo::Transform2 laser_pose = best_pose * laser_model_.laser_offset();
         for(unsigned int i = 0; i < sensor_points.size(); ++i)
