@@ -60,9 +60,9 @@ void OdomModel::updatePoses(const Transform& movement, double dt, ParticleFilter
     double delta_rot_sq = delta_rot * delta_rot;
 
     // Compute noise standard deviations
-    double trans_hat_stddev = alpha3 * delta_trans_sq + alpha1 * delta_rot_sq;
-    double rot_hat_stddev = alpha4 * delta_rot_sq + alpha2 * delta_trans_sq;
-    double strafe_hat_stddev = alpha1 * delta_rot_sq + alpha5 * delta_trans_sq;
+    double trans_hat_stddev = sqrt(alpha3 * delta_trans_sq + alpha1 * delta_rot_sq);
+    double rot_hat_stddev = sqrt(alpha4 * delta_rot_sq + alpha2 * delta_trans_sq);
+    double strafe_hat_stddev = sqrt(alpha1 * delta_rot_sq + alpha5 * delta_trans_sq);
 
     for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
     {
