@@ -17,7 +17,8 @@
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), tf_listener_(), tf_broadcaster_(0)
+LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_offset_initialized_(false),
+    tf_listener_(), tf_broadcaster_(0)
 {
 }
 
@@ -126,6 +127,36 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
     if (!laser_msg_)
         return;
+
+    if (!laser_offset_initialized_)
+    {
+        if (!tf_listener_->waitForTransform(base_link_frame_id_, laser_msg_->header.frame_id, laser_msg_->header.stamp, ros::Duration(1.0)))
+        {
+            ROS_WARN_STREAM("[ED LOCALIZATION] Cannot get transform from '" << base_link_frame_id_ << "' to '" << laser_msg_->header.frame_id << "'.");
+            return;
+        }
+
+        try
+        {
+            tf::StampedTransform p_laser;
+            tf_listener_->lookupTransform(base_link_frame_id_, laser_msg_->header.frame_id, laser_msg_->header.stamp, p_laser);
+
+            geo::Transform2 offset(geo::Mat2(p_laser.getBasis()[0][0], p_laser.getBasis()[0][1],
+                                             p_laser.getBasis()[1][0], p_laser.getBasis()[1][1]),
+                                   geo::Vec2(p_laser.getOrigin().getX(), p_laser.getOrigin().getY()));
+
+            double laser_height = p_laser.getOrigin().getZ();
+
+            laser_model_.setLaserOffset(offset, laser_height);
+        }
+        catch (tf::TransformException e)
+        {
+            std::cout << "[ED LOCALIZATION] " << e.what() << std::endl;
+            return;
+        }
+
+        laser_offset_initialized_ = true;
+    }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Calculate delta movement based on odom (fetched from TF)

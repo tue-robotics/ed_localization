@@ -80,19 +80,6 @@ void LaserModel::configure(tue::Configuration config)
 {
     config.value("num_beams", num_beams);
 
-    if (config.readGroup("laser_pose", tue::REQUIRED))
-    {
-        double x, y, rz;
-        config.value("x", x);
-        config.value("y", y);
-        config.value("rz", rz);
-        laser_offset_ = geo::Transform2(x, y, rz);
-
-        config.value("z", laser_height_);
-
-        config.endGroup();
-    }
-
     config.value("z_hit", z_hit);
     config.value("sigma_hit", sigma_hit);
     config.value("z_short", z_short);

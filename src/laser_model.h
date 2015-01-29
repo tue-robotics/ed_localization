@@ -31,6 +31,12 @@ public:
 
     const geo::Transform2& laser_offset() const { return laser_offset_; }
 
+    void setLaserOffset(const geo::Transform2& offset, double height)
+    {
+        laser_offset_ = offset;
+        laser_height_ = height;
+    }
+
 private:
 
     double z_hit;

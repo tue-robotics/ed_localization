@@ -73,6 +73,8 @@ private:
 
     ros::Publisher pub_particles_;
 
+    bool laser_offset_initialized_;
+
 
     // TF
 
