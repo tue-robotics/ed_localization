@@ -8,6 +8,7 @@
 
 // ROS
 #include <ros/subscriber.h>
+#include <ros/publisher.h>
 #include <ros/callback_queue.h>
 #include <sensor_msgs/LaserScan.h>
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
@@ -69,6 +70,8 @@ private:
     geometry_msgs::PoseWithCovarianceStampedConstPtr initial_pose_msg_;
 
     void initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg);
+
+    ros::Publisher pub_particles_;
 
 
     // TF

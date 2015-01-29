@@ -13,6 +13,8 @@
 #include <geolib/ros/msg_conversions.h>
 #include <geolib/ros/tf_conversions.h>
 
+#include <geometry_msgs/PoseArray.h>
+
 // ----------------------------------------------------------------------------------------------------
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), tf_listener_(), tf_broadcaster_(0)
@@ -77,6 +79,8 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
     delete tf_broadcaster_;
     tf_broadcaster_ = new tf::TransformBroadcaster;
+
+    pub_particles_ = nh.advertise<geometry_msgs::PoseArray>("/ed/localization/particles", 10);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -88,7 +92,7 @@ void LocalizationPlugin::initialize()
 // ----------------------------------------------------------------------------------------------------
 
 void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
-{
+{    
     laser_msg_.reset();
     initial_pose_msg_.reset();
     cb_queue_.callAvailable();
@@ -220,6 +224,31 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
     // Publish TF
     tf_broadcaster_->sendTransform(map_to_odom_tf);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Publish particles
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    const std::vector<Sample>& samples = particle_filter_.samples();
+    geometry_msgs::PoseArray particles_msg;
+    particles_msg.poses.resize(samples.size());
+    for(unsigned int i = 0; i < samples.size(); ++i)
+    {
+        const geo::Transform2& p = samples[i].pose.matrix();
+
+        geo::Pose3D pose_3d;
+        pose_3d.t = geo::Vector3(p.t.x, p.t.y, 0);
+        pose_3d.R = geo::Matrix3(p.R.xx, p.R.xy, 0,
+                                 p.R.yx, p.R.yy, 0,
+                                 0     , 0     , 1);
+
+        geo::convert(pose_3d, particles_msg.poses[i]);
+    }
+
+    particles_msg.header.frame_id = "/map";
+    particles_msg.header.stamp = laser_msg_->header.stamp;
+
+    pub_particles_.publish(particles_msg);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Visualization
