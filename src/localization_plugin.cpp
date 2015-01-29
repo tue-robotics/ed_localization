@@ -74,6 +74,21 @@ void LocalizationPlugin::configure(tue::Configuration config)
         sub_initial_pose_ = nh.subscribe(sub_opts);
     }
 
+    if (config.readGroup("initial_pose", tue::OPTIONAL))
+    {
+        geo::Vec2 p;
+        double yaw;
+
+        config.value("x", p.x);
+        config.value("y", p.y);
+        config.value("rz", yaw);
+
+        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
+                                     yaw - 0.1, yaw + 0.1, 0.05);
+
+        config.endGroup();
+    }
+
     delete tf_listener_;
     tf_listener_ = new tf::TransformListener;
 
