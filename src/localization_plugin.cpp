@@ -23,6 +23,8 @@ LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), tf_listen
 
 LocalizationPlugin::~LocalizationPlugin()
 {
+    delete tf_broadcaster_;
+    delete tf_listener_;
 }
 
 // ----------------------------------------------------------------------------------------------------

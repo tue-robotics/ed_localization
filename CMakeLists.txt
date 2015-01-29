@@ -55,9 +55,17 @@ include_directories(
 )
 
 add_library(ed_localization_plugin
-    src/particle_filter.cpp
     src/localization_plugin.cpp
+    src/particle_filter.cpp
     src/laser_model.cpp
     src/odom_model.cpp
 )
+
+add_library(ed_partial_localization_plugin
+    src/relative_localization_plugin.cpp
+    src/particle_filter.cpp
+    src/laser_model.cpp
+    src/odom_model.cpp
+)
+
 # target_link_libraries(library_name ${catkin_LIBRARIES})
