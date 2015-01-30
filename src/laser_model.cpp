@@ -161,9 +161,21 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
         sample_max.y = std::max(sample_min.y, laser_pose.t.y);
     }
 
+    double temp_range_max = 0;
+    for(unsigned int i = 0; i < sensor_ranges_.size(); ++i)
+    {
+        double r = sensor_ranges_[i];
+        if (r < range_max)
+            temp_range_max = std::max(temp_range_max, r);
+    }
+
+    // Add a small buffer to the distance to allow model data that is
+    // slightly further away to still match
+    temp_range_max += lambda_short;
+
     // Calculate the sample boundary center and boundary render distance
     geo::Vec2 sample_center = (sample_min + sample_max) / 2;
-    double max_distance = (sample_max - sample_min).length() / 2 + range_max;
+    double max_distance = (sample_max - sample_min).length() / 2 + temp_range_max;
 
     // Set the range limit to the lrf renderer. This will make sure all shapes that
     // are too far away will not be rendered (object selection, not line selection)
@@ -205,7 +217,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     // -     Calculate sample weight updates
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    lrf_.setRangeLimits(scan.range_min, max_distance);
+    lrf_.setRangeLimits(scan.range_min, temp_range_max);
 
     for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
     {
