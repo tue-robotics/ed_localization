@@ -52,6 +52,9 @@ private:
 
     int num_beams;
 
+    double min_particle_distance_;
+    double min_particle_rotation_distance_;
+
     // CACHING
     std::vector<double> exp_hit_;
     std::vector<double> exp_short_;

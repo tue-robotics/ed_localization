@@ -5,6 +5,8 @@
 #include <ed/entity.h>
 #include <geolib/Shape.h>
 
+#include <tue/profiling/timer.h>
+
 // ----------------------------------------------------------------------------------------------------
 
 class LineRenderResult : public geo::LaserRangeFinder::RenderResult
@@ -87,6 +89,8 @@ void LaserModel::configure(tue::Configuration config)
     config.value("z_rand", z_rand);
     config.value("lambda_short", lambda_short);
     config.value("range_max", range_max);
+    config.value("min_particle_distance", min_particle_distance_);
+    config.value("min_particle_rotation_distance", min_particle_rotation_distance_);
 
     // Pre-calculate expensive operations
     int resolution = 1000; // mm accuracy
@@ -110,6 +114,59 @@ void LaserModel::configure(tue::Configuration config)
 
 void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::LaserScan& scan, ParticleFilter& pf)
 {
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Find unique samples
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    // If N samples are nearly identical, we only want to calculate the probability update
+    // once and share it for all N samples. Therefore, we create a sample list 'unique_samples'
+    // that only contain samples that are further apart than a given threshold. We will only
+    // calculate the probabilities of those samples, and share them with the similar samples.
+
+    // unique samples
+    std::vector<Transform> unique_samples;
+
+    // mapping of samples from the particle filter to the unique sample list
+    std::vector<unsigned int> sample_to_unique(pf.samples().size());
+
+    double min_particle_distance_sq = min_particle_distance_ * min_particle_distance_;
+
+    for(unsigned int i = 0; i < pf.samples().size(); ++i)
+    {
+        const Sample& s1 = pf.samples()[i];
+        const Transform& t1 = s1.pose;
+
+        bool found = false;
+        for(unsigned int j = 0; j < unique_samples.size(); ++j)
+        {
+            const Transform& t2 = unique_samples[j];
+
+            // Calculate difference in rotation
+            double rot_diff = std::abs(t1.rotation() - t2.rotation());
+            if (rot_diff > M_PI)
+                rot_diff = 2 * M_PI - rot_diff;
+
+            // Check if translation and rotational difference are within boundaries
+            if ((t1.matrix().t - t2.matrix().t).length2() < min_particle_distance_sq && rot_diff < min_particle_rotation_distance_)
+            {
+                found = true;
+                sample_to_unique[i] = j;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            sample_to_unique[i] = unique_samples.size();
+            unique_samples.push_back(t1);
+        }
+    }
+
+    // If there is only one unique sample, it means are particles are (almost) identical, and the laser model
+    // update is not neccesary. This typically holds if the robot is standing still.
+    if (unique_samples.size() == 1)
+        return;
+
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update world renderer
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -219,11 +276,10 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
 
     lrf_.setRangeLimits(scan.range_min, temp_range_max);
 
-    for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
+    std::vector<double> weight_updates(unique_samples.size());
+    for(unsigned int j = 0; j < unique_samples.size(); ++j)
     {
-        Sample& sample = *it;
-\
-        geo::Transform2 laser_pose = sample.pose.matrix() * laser_offset_;
+        geo::Transform2 laser_pose = unique_samples[j].matrix() * laser_offset_;
         geo::Transform2 pose_inv = laser_pose.inverse();
 
         // Calculate sensor model for this pose
@@ -254,12 +310,12 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
             double pz = 0;
 
             // Part 1: good, but noisy, hit
-//            pz += this->z_hit * exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
+            //            pz += this->z_hit * exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
             pz += this->z_hit * exp_hit_[std::min(std::abs(z), range_max) * 1000];
 
             // Part 2: short reading from unexpected obstacle (e.g., a person)
             if(z < 0)
-//                pz += this->z_short * this->lambda_short * exp(-this->lambda_short*obs_range);
+                //                pz += this->z_short * this->lambda_short * exp(-this->lambda_short*obs_range);
                 pz += this->z_short * this->lambda_short * exp_short_[std::min(obs_range, range_max) * 1000];
 
             // Part 3: Failure to detect obstacle, reported as max-range
@@ -270,23 +326,22 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
             if(obs_range < this->range_max)
                 pz += this->z_rand * 1.0 / this->range_max;
 
-//            if (pz > 1)
-//            {
-//                std::cout << "[ED LOCALIZATION] Warning: pz > 1 (pz = " << pz << ")" << std::endl;
-//                std::cout << "    obs_range = " << obs_range << ", map_range = " << map_range << std::endl;
-//                std::cout << "    hit   = " << this->z_hit * exp_hit_[std::min(std::abs(z), range_max) * 1000] << std::endl;
-//                std::cout << "    short = " << this->z_short * this->lambda_short * exp_short_[std::min(obs_range, range_max) * 1000] << std::endl;
-//                std::cout << "    max   = " << this->z_max * 1.0 << std::endl;
-//                std::cout << "    rand  = " << this->z_rand * 1.0 / this->range_max << std::endl;
-//            }
-
             // here we have an ad-hoc weighting scheme for combining beam probs
             // works well, though...
             p += pz * pz * pz;
-
         }
 
-        sample.weight *= p;
+        weight_updates[j] = p;
+    }
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Update the particle filter
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    for(unsigned int j = 0; j < pf.samples().size(); ++j)
+    {
+        Sample& sample = pf.samples()[j];
+        sample.weight *= weight_updates[sample_to_unique[j]];
     }
 
     pf.normalize();
