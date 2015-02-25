@@ -96,7 +96,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
     delete tf_broadcaster_;
     tf_broadcaster_ = new tf::TransformBroadcaster;
 
-    pub_particles_ = nh.advertise<geometry_msgs::PoseArray>("/ed/localization/particles", 10);
+    pub_particles_ = nh.advertise<geometry_msgs::PoseArray>("ed/localization/particles", 10);
 }
 
 // ----------------------------------------------------------------------------------------------------

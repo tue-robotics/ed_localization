@@ -1,3 +1,3 @@
 #! /bin/bash
 LIBPATH=~/ros/hydro/dev/devel/lib/libed_localization_plugin.so
-rosservice call /ed/load_plugin "{plugin_name: 'ed_localization_plugin', library_path: '$LIBPATH', configuration: '{ laser_model: { topic: /amigo/base_front_laser, num_beams: 100 }, odom_model: { topic: /amigo/base/measurements, alpha1: 0.5, alpha2: 0.5, alpha3: 0.5, alpha4: 0.5, alpha5: 0.5 } }' }" 
+rosservice call /amigo/ed/load_plugin "{plugin_name: 'ed_localization_plugin', library_path: '$LIBPATH', configuration: '{ laser_model: { topic: /amigo/base_front_laser, num_beams: 100 }, odom_model: { topic: /amigo/base/measurements, alpha1: 0.5, alpha2: 0.5, alpha3: 0.5, alpha4: 0.5, alpha5: 0.5 } }' }" 
