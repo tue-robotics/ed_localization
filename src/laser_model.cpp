@@ -255,7 +255,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
         const ed::EntityConstPtr& e = *it;
-        if (e->shape())
+        if (e->shape() && e->has_pose())
         {
             geo::LaserRangeFinder::RenderOptions options;
             geo::Transform t_inv = laser_pose.inverse() * e->pose();
