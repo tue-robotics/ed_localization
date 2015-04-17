@@ -60,4 +60,8 @@ add_library(ed_localization_plugin
     src/laser_model.cpp
     src/odom_model.cpp
 )
+
+add_library(ed_slam_plugin
+    src/slam/slam_plugin.cpp
+)
 # target_link_libraries(library_name ${catkin_LIBRARIES})
