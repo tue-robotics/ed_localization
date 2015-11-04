@@ -39,6 +39,9 @@ public:
 
 private:
 
+    std::string robot_name_;
+
+
     // PARTICLE FILTER
 
     int num_particles_;

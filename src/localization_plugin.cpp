@@ -15,6 +15,8 @@
 
 #include <geometry_msgs/PoseArray.h>
 
+#include <ed/update_request.h>
+
 // ----------------------------------------------------------------------------------------------------
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_offset_initialized_(false),
@@ -89,6 +91,8 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
         config.endGroup();
     }
+
+    config.value("robot_name", robot_name_);
 
     delete tf_listener_;
     tf_listener_ = new tf::TransformListener;
@@ -270,6 +274,9 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
     // Publish TF
     tf_broadcaster_->sendTransform(map_to_odom_tf);
+
+    if (!robot_name_.empty())
+        req.setPose(robot_name_, map_to_base_link);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Publish particles
