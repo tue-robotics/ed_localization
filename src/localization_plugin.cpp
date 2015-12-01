@@ -112,8 +112,7 @@ void LocalizationPlugin::initialize()
 // ----------------------------------------------------------------------------------------------------
 
 void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
-{    
-    laser_msg_.reset();
+{
     initial_pose_msg_.reset();
     cb_queue_.callAvailable();
 
@@ -129,35 +128,35 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
                                      yaw - 0.1, yaw + 0.1, 0.05);
     }
 
-    if (!laser_msg_)
-        return;
+    while(!scan_buffer_.empty())
+    {
+        TransformStatus status = update(scan_buffer_.front(), world, req);
+        if (status == OK || status == TOO_OLD || status == UNKNOWN_ERROR)
+            scan_buffer_.pop();
+        else
+            break;
+    }
+}
 
+// ----------------------------------------------------------------------------------------------------
+
+TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const ed::WorldModel& world, ed::UpdateRequest& req)
+{    
     if (!laser_offset_initialized_)
     {
-        if (!tf_listener_->waitForTransform(base_link_frame_id_, laser_msg_->header.frame_id, laser_msg_->header.stamp, ros::Duration(1.0)))
-        {
-            ROS_WARN_STREAM("[ED LOCALIZATION] Cannot get transform from '" << base_link_frame_id_ << "' to '" << laser_msg_->header.frame_id << "'.");
-            return;
-        }
+        tf::StampedTransform p_laser;
+        TransformStatus ts = this->transform(base_link_frame_id_, scan->header.frame_id, scan->header.stamp, p_laser);
 
-        try
-        {
-            tf::StampedTransform p_laser;
-            tf_listener_->lookupTransform(base_link_frame_id_, laser_msg_->header.frame_id, laser_msg_->header.stamp, p_laser);
+        if (ts != OK)
+            return ts;
 
-            geo::Transform2 offset(geo::Mat2(p_laser.getBasis()[0][0], p_laser.getBasis()[0][1],
-                                             p_laser.getBasis()[1][0], p_laser.getBasis()[1][1]),
-                                   geo::Vec2(p_laser.getOrigin().getX(), p_laser.getOrigin().getY()));
+        geo::Transform2 offset(geo::Mat2(p_laser.getBasis()[0][0], p_laser.getBasis()[0][1],
+                                         p_laser.getBasis()[1][0], p_laser.getBasis()[1][1]),
+                               geo::Vec2(p_laser.getOrigin().getX(), p_laser.getOrigin().getY()));
 
-            double laser_height = p_laser.getOrigin().getZ();
+        double laser_height = p_laser.getOrigin().getZ();
 
-            laser_model_.setLaserOffset(offset, laser_height);
-        }
-        catch (tf::TransformException e)
-        {
-            std::cout << "[ED LOCALIZATION] " << e.what() << std::endl;
-            return;
-        }
+        laser_model_.setLaserOffset(offset, laser_height);
 
         laser_offset_initialized_ = true;
     }
@@ -166,60 +165,41 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     // -     Calculate delta movement based on odom (fetched from TF)
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    if (!tf_listener_->waitForTransform(odom_frame_id_, base_link_frame_id_, laser_msg_->header.stamp, ros::Duration(1.0)))
-    {
-        ROS_WARN_STREAM("[ED LOCALIZATION] Cannot get transform from '" << odom_frame_id_ << "' to '" << base_link_frame_id_ << "'.");
-        return;
-    }
-
     geo::Pose3D odom_to_base_link;
     Transform movement;
 
-    try
+    tf::StampedTransform odom_to_base_link_tf;
+    TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, scan->header.stamp, odom_to_base_link_tf);
+    if (ts != OK)
+        return ts;
+
+    geo::convert(odom_to_base_link_tf, odom_to_base_link);
+
+    if (have_previous_pose_)
     {
-        tf::StampedTransform odom_to_base_link_tf;
+        geo::Pose3D delta = previous_pose_.inverse() * odom_to_base_link;
 
-        tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, laser_msg_->header.stamp, odom_to_base_link_tf);
+        // Convert to 2D transformation
+        geo::Transform2 delta_2d(geo::Mat2(delta.R.xx, delta.R.xy,
+                                           delta.R.yx, delta.R.yy),
+                                 geo::Vec2(delta.t.x, delta.t.y));
 
-        geo::convert(odom_to_base_link_tf, odom_to_base_link);
-
-        if (have_previous_pose_)
-        {
-            geo::Pose3D delta = previous_pose_.inverse() * odom_to_base_link;
-
-            // Convert to 2D transformation
-            geo::Transform2 delta_2d(geo::Mat2(delta.R.xx, delta.R.xy,
-                                               delta.R.yx, delta.R.yy),
-                                     geo::Vec2(delta.t.x, delta.t.y));
-
-            movement.set(delta_2d);
-        }
-        else
-        {
-            movement.set(geo::Transform2::identity());
-        }
-
-        previous_pose_ = odom_to_base_link;
-        have_previous_pose_ = true;
+        movement.set(delta_2d);
     }
-    catch (tf::TransformException e)
+    else
     {
-        std::cout << "[ED LOCALIZATION] " << e.what() << std::endl;
-
-        if (!have_previous_pose_)
-            return;
-
-        odom_to_base_link = previous_pose_;
-
         movement.set(geo::Transform2::identity());
     }
+
+    previous_pose_ = odom_to_base_link;
+    have_previous_pose_ = true;
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Check if particle filter is initialized
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     if (particle_filter_.samples().empty())
-        return;
+        return UNKNOWN_ERROR;
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update motion
@@ -234,7 +214,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 //    tue::Timer timer;
 //    timer.start();
 
-    laser_model_.updateWeights(world, *laser_msg_, particle_filter_);
+    laser_model_.updateWeights(world, *scan, particle_filter_);
 
 //    std::cout << "----------" << std::endl;
 //    std::cout << "Number of lines = " << laser_model_.lines_start().size() << std::endl;
@@ -270,7 +250,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     // Set frame id's and time stamp
     map_to_odom_tf.frame_id_ = map_frame_id_;
     map_to_odom_tf.child_frame_id_ = odom_frame_id_;
-    map_to_odom_tf.stamp_ = laser_msg_->header.stamp;
+    map_to_odom_tf.stamp_ = scan->header.stamp;
 
     // Publish TF
     tf_broadcaster_->sendTransform(map_to_odom_tf);
@@ -299,7 +279,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     }
 
     particles_msg.header.frame_id = "/map";
-    particles_msg.header.stamp = laser_msg_->header.stamp;
+    particles_msg.header.stamp = scan->header.stamp;
 
     pub_particles_.publish(particles_msg);
 
@@ -368,13 +348,57 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         cv::imshow("localization", rgb_image);
         cv::waitKey(1);
     }
+
+    return OK;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+TransformStatus LocalizationPlugin::transform(const std::string& target_frame, const std::string& source_frame,
+                                              const ros::Time& time, tf::StampedTransform& transform)
+{
+    try
+    {
+        tf_listener_->lookupTransform(target_frame, source_frame, time, transform);
+        return OK;
+    }
+    catch(tf::ExtrapolationException& ex)
+    {
+        try
+        {
+            // Now we have to check if the error was an interpolation or extrapolation error
+            // (i.e., the scan is too old or too new, respectively)
+
+            tf::StampedTransform latest_transform;
+            tf_listener_->lookupTransform(target_frame, source_frame, ros::Time(0), latest_transform);
+
+            if (scan_buffer_.front()->header.stamp > latest_transform.stamp_)
+            {
+                // Scan is too new
+                return TOO_RECENT;
+            }
+            else
+            {
+                // Otherwise it has to be too old
+                return TOO_OLD;
+            }
+        }
+        catch(tf::TransformException& exc)
+        {
+            return UNKNOWN_ERROR;
+        }
+    }
+    catch(tf::TransformException& ex)
+    {
+        return UNKNOWN_ERROR;
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------
 
 void LocalizationPlugin::laserCallback(const sensor_msgs::LaserScanConstPtr& msg)
 {
-    laser_msg_ = msg;
+    scan_buffer_.push(msg);
 }
 
 // ----------------------------------------------------------------------------------------------------
