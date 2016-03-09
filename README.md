@@ -1,7 +1,7 @@
 ED Localization [![Build Status](https://travis-ci.org/tue-robotics/ed_localization.svg?branch=master)](https://travis-ci.org/tue-robotics/ed_localization)
 ======
 
-A fast particle filter implementation and sensor models which always take into account the most recent state of the world. This means that if the world representation improves while the robot is running, localization becomes better. The localization module is more efficient and accurate than the well-known [AMCL-module](http://wiki.ros.org/amcl) and *no* separate occupancy grid is needed.
+A fast particle filter implementation and sensor models for localizing a robot which always take into account the most recent state of the world. This means that if the world representation improves while the robot is running, localization becomes better. The localization module is more efficient and accurate than the well-known [AMCL-module](http://wiki.ros.org/amcl) and *no* separate occupancy grid is needed.
 
 ## Installation
 
