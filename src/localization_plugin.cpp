@@ -154,9 +154,16 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
                                          p_laser.getBasis()[1][0], p_laser.getBasis()[1][1]),
                                geo::Vec2(p_laser.getOrigin().getX(), p_laser.getOrigin().getY()));
 
+        bool upside_down = p_laser.getBasis()[2][2] < 0;
+        if (upside_down)
+        {
+            offset.R.yx = -offset.R.yx;
+            offset.R.yy = -offset.R.yy;
+        }
+
         double laser_height = p_laser.getOrigin().getZ();
 
-        laser_model_.setLaserOffset(offset, laser_height);
+        laser_model_.setLaserOffset(offset, laser_height, upside_down);
 
         laser_offset_initialized_ = true;
     }

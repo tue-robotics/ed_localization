@@ -31,10 +31,11 @@ public:
 
     const geo::Transform2& laser_offset() const { return laser_offset_; }
 
-    void setLaserOffset(const geo::Transform2& offset, double height)
+    void setLaserOffset(const geo::Transform2& offset, double height, bool upside_down)
     {
         laser_offset_ = offset;
         laser_height_ = height;
+        laser_upside_down_ = upside_down;
     }
 
 private:
@@ -49,6 +50,7 @@ private:
 
     double laser_height_;
     geo::Transform2 laser_offset_;
+    bool laser_upside_down_;
 
     int num_beams;
 

@@ -196,6 +196,10 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
         range_max = std::min<double>(range_max, scan.range_max);
     }
 
+    // If the laser is upside down, we need to mirror the sensor data
+    if (laser_upside_down_)
+        std::reverse(sensor_ranges_.begin(), sensor_ranges_.end());
+
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Determine center and maximum range of world model cross section
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
