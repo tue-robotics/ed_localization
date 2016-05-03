@@ -261,6 +261,10 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
         const ed::EntityConstPtr& e = *it;
         if (e->shape() && e->has_pose())
         {
+            // Do not render the robot itself (we're trying to localize it!)
+            if (e->hasFlag("self"))
+                continue;
+
             geo::LaserRangeFinder::RenderOptions options;
             geo::Transform t_inv = laser_pose.inverse() * e->pose();
             options.setMesh(e->shape()->getMesh(), t_inv);
