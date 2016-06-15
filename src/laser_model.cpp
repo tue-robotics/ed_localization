@@ -265,6 +265,9 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
             if (e->hasFlag("self"))
                 continue;
 
+            if (e->hasFlag("non-localizable"))
+                continue;
+
             geo::LaserRangeFinder::RenderOptions options;
             geo::Transform t_inv = laser_pose.inverse() * e->pose();
             options.setMesh(e->shape()->getMesh(), t_inv);
