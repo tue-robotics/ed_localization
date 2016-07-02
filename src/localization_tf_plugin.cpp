@@ -57,7 +57,7 @@ void LocalizationTFPlugin::process(const ed::WorldModel& world, ed::UpdateReques
         geo::Pose3D pose;
         geo::convert(t_pose, pose);
 
-        req.setPose(robot_name_, pose);
+        req.setPose(robot_name_, pose.inverse());
     }
     catch(tf::TransformException& exc)
     {
