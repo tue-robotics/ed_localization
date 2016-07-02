@@ -27,3 +27,10 @@ add_library(ed_localization_plugin
 )
 # target_link_libraries(library_name ${catkin_LIBRARIES})
 add_dependencies(ed_localization_plugin ${catkin_EXPORTED_TARGETS})
+
+add_library(ed_localization_tf_plugin
+  src/localization_tf_plugin.cpp
+  src/localization_tf_plugin.h
+)
+# target_link_libraries(library_name ${catkin_LIBRARIES})
+add_dependencies(ed_localization_tf_plugin ${catkin_EXPORTED_TARGETS})
