@@ -84,45 +84,6 @@ void LocalizationPlugin::configure(tue::Configuration config)
                     initial_pose_topic, 1, boost::bind(&LocalizationPlugin::initialPoseCallback, this, _1), ros::VoidPtr(), &cb_queue_);
         sub_initial_pose_ = nh.subscribe(sub_opts);
     }
-//------------------------------------------------------------------------------------------------------------------------
-
-    std::map<std::string, double> position;
-    std::cout << "setting initial pose before";
-    if (nh.getParam("initial_pose", position))
-    {
-        geo::Vec2 p;
-        double yaw;
-
-        geometry_msgs::PoseWithCovarianceStamped initpose_param;
-
-        p.x = position["x"];
-        p.y = position["y"];
-        yaw = position["yaw"];
-
-        tf::Matrix3x3 M_tf;
-        M_tf.setEulerYPR(yaw, 0.0, 0.0);
-        tf::Quaternion q_tf;
-        M_tf.getRotation(q_tf);
-        tf::quaternionTFToMsg(q_tf, initpose_param.pose.pose.orientation);
-
-        initpose_param.pose.pose.position.x = p.x;
-        initpose_param.pose.pose.position.y = p.y;
-        initpose_param.header.frame_id = map_frame_id_;
-
-        ros::Publisher initpose_pub = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>(initial_pose_topic, 1);
-
-        initpose_pub.publish(initpose_param);
-        ros::Duration(0.5).sleep();
-        initpose_pub.publish(initpose_param);
-
-
-////        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-////                                     yaw - 0.1, yaw + 0.1, 0.05);
-////        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-////                                     yaw - 0.1, yaw + 0.1, 0.05);
-    }
-
-//------------------------------------------------------------------------------------------------------------------------
 
     if (config.readGroup("initial_pose", tue::OPTIONAL))
     {
@@ -136,8 +97,68 @@ void LocalizationPlugin::configure(tue::Configuration config)
         particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
                                      yaw - 0.1, yaw + 0.1, 0.05);
 
+        Transform movement;
+        movement.setTranslation(p);
+//        movement.setRotation(yaw);
+        odom_model_.updatePoses(movement, 0, particle_filter_);
+
         config.endGroup();
     }
+
+//------------------------------------------------------------------------------------------------------------------------
+
+//    std::map<std::string, double> position;
+//    if (nh.getParam("initial_pose", position))
+//    {
+//        geo::Vec2 p;
+//        double yaw;
+
+//        p.x = position["x"];
+//        p.y = position["y"];
+//        yaw = position["yaw"];
+
+//        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
+//                                     yaw - 0.1, yaw + 0.1, 0.05);
+
+////        geo::Pose3D odom_to_base_link;
+////        tf::StampedTransform odom_to_base_link_tf;
+////        TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, ros::Time::now() , odom_to_base_link_tf);
+////        if (ts != OK)
+////            break;
+
+////        geo::convert(odom_to_base_link_tf, odom_to_base_link);
+
+//        Transform movement;
+
+//        movement.setRotation(yaw);
+//        movement.setTranslation(p);
+//        odom_model_.updatePoses(movement, 0, particle_filter_);
+
+////        geometry_msgs::PoseWithCovarianceStamped initpose_param_msg;
+
+////        tf::Matrix3x3 M_tf;
+////        M_tf.setEulerYPR(yaw, 0.0, 0.0);
+////        tf::Quaternion q_tf;
+////        M_tf.getRotation(q_tf);
+////        tf::quaternionTFToMsg(q_tf, initpose_param_msg.pose.pose.orientation);
+
+////        initpose_param_msg.pose.pose.position.x = p.x;
+////        initpose_param_msg.pose.pose.position.y = p.y;
+////        initpose_param_msg.header.frame_id = map_frame_id_;
+////        initpose_param_msg.header.stamp = ros::Time::now();
+
+////        ros::Publisher initpose_pub = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>(initial_pose_topic, 1);
+////        ros::AdvertiseOptions adv_opts = ros::AdvertiseOptions::create<geometry_msgs::PoseWithCovarianceStamped>(initial_pose_topic, 1, ros::VoidConstPtr(),
+////                                                                                                                 ros::VoidConstPtr(), ros::VoidConstPtr(), &cb_queue_);
+////        ros::Publisher initpose_pub = nh.advertise(adv_opts);
+
+////        initpose_pub.publish(initpose_param_msg);
+////        ros::spinOnce();
+////        ros::Duration(0.2).sleep();
+////        initpose_pub.publish(initpose_param_msg);
+//    }
+
+//------------------------------------------------------------------------------------------------------------------------
 
     config.value("robot_name", robot_name_);
 
@@ -149,6 +170,8 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
     pub_particles_ = nh.advertise<geometry_msgs::PoseArray>("ed/localization/particles", 10);
 }
+
+
 
 // ----------------------------------------------------------------------------------------------------
 
