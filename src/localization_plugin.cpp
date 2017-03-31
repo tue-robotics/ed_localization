@@ -29,6 +29,13 @@ LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_off
 
 LocalizationPlugin::~LocalizationPlugin()
 {
+    // Saving last pose in parameter server
+    Transform last_pose = particle_filter_.bestSample().pose;
+
+    ros::NodeHandle nh;
+    nh.setParam("initial_pose/x", last_pose.translation().x);
+    nh.setParam("initial_pose/y", last_pose.translation().y);
+    nh.setParam("initial_pose/yaw", last_pose.rotation());
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -77,6 +84,45 @@ void LocalizationPlugin::configure(tue::Configuration config)
                     initial_pose_topic, 1, boost::bind(&LocalizationPlugin::initialPoseCallback, this, _1), ros::VoidPtr(), &cb_queue_);
         sub_initial_pose_ = nh.subscribe(sub_opts);
     }
+//------------------------------------------------------------------------------------------------------------------------
+
+    std::map<std::string, double> position;
+    std::cout << "setting initial pose before";
+    if (nh.getParam("initial_pose", position))
+    {
+        geo::Vec2 p;
+        double yaw;
+
+        geometry_msgs::PoseWithCovarianceStamped initpose_param;
+
+        p.x = position["x"];
+        p.y = position["y"];
+        yaw = position["yaw"];
+
+        tf::Matrix3x3 M_tf;
+        M_tf.setEulerYPR(yaw, 0.0, 0.0);
+        tf::Quaternion q_tf;
+        M_tf.getRotation(q_tf);
+        tf::quaternionTFToMsg(q_tf, initpose_param.pose.pose.orientation);
+
+        initpose_param.pose.pose.position.x = p.x;
+        initpose_param.pose.pose.position.y = p.y;
+        initpose_param.header.frame_id = map_frame_id_;
+
+        ros::Publisher initpose_pub = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>(initial_pose_topic, 1);
+
+        initpose_pub.publish(initpose_param);
+        ros::Duration(0.5).sleep();
+        initpose_pub.publish(initpose_param);
+
+
+////        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
+////                                     yaw - 0.1, yaw + 0.1, 0.05);
+////        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
+////                                     yaw - 0.1, yaw + 0.1, 0.05);
+    }
+
+//------------------------------------------------------------------------------------------------------------------------
 
     if (config.readGroup("initial_pose", tue::OPTIONAL))
     {
@@ -142,7 +188,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 // ----------------------------------------------------------------------------------------------------
 
 TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const ed::WorldModel& world, ed::UpdateRequest& req)
-{    
+{
     if (!laser_offset_initialized_)
     {
         tf::StampedTransform p_laser;
