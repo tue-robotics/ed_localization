@@ -33,9 +33,9 @@ LocalizationPlugin::~LocalizationPlugin()
     Transform last_pose = particle_filter_.bestSample().pose;
 
     ros::NodeHandle nh;
-    nh.setParam("initial_pose/x", last_pose.translation().x);
-    nh.setParam("initial_pose/y", last_pose.translation().y);
-    nh.setParam("initial_pose/yaw", last_pose.rotation());
+    nh.setParam("initialpose/x", last_pose.translation().x);
+    nh.setParam("initialpose/y", last_pose.translation().y);
+    nh.setParam("initialpose/yaw", last_pose.rotation());
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -97,66 +97,40 @@ void LocalizationPlugin::configure(tue::Configuration config)
         particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
                                      yaw - 0.1, yaw + 0.1, 0.05);
 
-        Transform movement;
-        movement.setTranslation(p);
-//        movement.setRotation(yaw);
-        odom_model_.updatePoses(movement, 0, particle_filter_);
-
         config.endGroup();
     }
 
 //------------------------------------------------------------------------------------------------------------------------
 
-//    std::map<std::string, double> position;
-//    if (nh.getParam("initial_pose", position))
-//    {
-//        geo::Vec2 p;
-//        double yaw;
+    std::map<std::string, double> position;
+    if (nh.getParam("initialpose", position))
+    {
+        geo::Vec2 p;
+        double yaw;
 
-//        p.x = position["x"];
-//        p.y = position["y"];
-//        yaw = position["yaw"];
+        p.x = position["x"];
+        p.y = position["y"];
+        yaw = position["yaw"];
 
-//        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-//                                     yaw - 0.1, yaw + 0.1, 0.05);
+        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
+                                     yaw - 0.1, yaw + 0.1, 0.05);
 
-////        geo::Pose3D odom_to_base_link;
-////        tf::StampedTransform odom_to_base_link_tf;
-////        TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, ros::Time::now() , odom_to_base_link_tf);
-////        if (ts != OK)
-////            break;
 
-////        geo::convert(odom_to_base_link_tf, odom_to_base_link);
+        geometry_msgs::PoseWithCovarianceStamped initpose_param_msg;
 
-//        Transform movement;
+        tf::Matrix3x3 M_tf;
+        M_tf.setEulerYPR(yaw, 0.0, 0.0);
+        tf::Quaternion q_tf;
+        M_tf.getRotation(q_tf);
+        tf::quaternionTFToMsg(q_tf, initpose_param_msg.pose.pose.orientation);
 
-//        movement.setRotation(yaw);
-//        movement.setTranslation(p);
-//        odom_model_.updatePoses(movement, 0, particle_filter_);
+        initpose_param_msg.pose.pose.position.x = p.x;
+        initpose_param_msg.pose.pose.position.y = p.y;
+        initpose_param_msg.header.frame_id = map_frame_id_;
+        initpose_param_msg.header.stamp = ros::Time::now();
 
-////        geometry_msgs::PoseWithCovarianceStamped initpose_param_msg;
-
-////        tf::Matrix3x3 M_tf;
-////        M_tf.setEulerYPR(yaw, 0.0, 0.0);
-////        tf::Quaternion q_tf;
-////        M_tf.getRotation(q_tf);
-////        tf::quaternionTFToMsg(q_tf, initpose_param_msg.pose.pose.orientation);
-
-////        initpose_param_msg.pose.pose.position.x = p.x;
-////        initpose_param_msg.pose.pose.position.y = p.y;
-////        initpose_param_msg.header.frame_id = map_frame_id_;
-////        initpose_param_msg.header.stamp = ros::Time::now();
-
-////        ros::Publisher initpose_pub = nh.advertise<geometry_msgs::PoseWithCovarianceStamped>(initial_pose_topic, 1);
-////        ros::AdvertiseOptions adv_opts = ros::AdvertiseOptions::create<geometry_msgs::PoseWithCovarianceStamped>(initial_pose_topic, 1, ros::VoidConstPtr(),
-////                                                                                                                 ros::VoidConstPtr(), ros::VoidConstPtr(), &cb_queue_);
-////        ros::Publisher initpose_pub = nh.advertise(adv_opts);
-
-////        initpose_pub.publish(initpose_param_msg);
-////        ros::spinOnce();
-////        ros::Duration(0.2).sleep();
-////        initpose_pub.publish(initpose_param_msg);
-//    }
+        boost::bind(&LocalizationPlugin::initialPoseCallback, this, initpose_param_msg);
+    }
 
 //------------------------------------------------------------------------------------------------------------------------
 
