@@ -100,7 +100,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
         config.endGroup();
     }
 
-//------------------------------------------------------------------------------------------------------------------------
+    // Getting last pose from parameter server
 
     std::map<std::string, double> position;
     if (nh.getParam("initialpose", position))
@@ -114,7 +114,6 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
         particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
                                      yaw - 0.1, yaw + 0.1, 0.05);
-
 
         geometry_msgs::PoseWithCovarianceStamped initpose_param_msg;
 
@@ -132,8 +131,6 @@ void LocalizationPlugin::configure(tue::Configuration config)
         boost::bind(&LocalizationPlugin::initialPoseCallback, this, initpose_param_msg);
     }
 
-//------------------------------------------------------------------------------------------------------------------------
-
     config.value("robot_name", robot_name_);
 
     delete tf_listener_;
@@ -144,8 +141,6 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
     pub_particles_ = nh.advertise<geometry_msgs::PoseArray>("ed/localization/particles", 10);
 }
-
-
 
 // ----------------------------------------------------------------------------------------------------
 
