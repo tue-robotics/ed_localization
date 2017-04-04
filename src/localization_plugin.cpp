@@ -85,48 +85,28 @@ void LocalizationPlugin::configure(tue::Configuration config)
         sub_initial_pose_ = nh.subscribe(sub_opts);
     }
 
-    if (config.readGroup("initial_pose", tue::OPTIONAL))
-    {
-        geo::Vec2 p;
-        double yaw;
+    // Initial pose
+    geo::Vec2 p; p.x = 0; p.y = 0;
+    double yaw = 0;
 
+    // Getting last pose from parameter server
+    std::map<std::string, double> ros_param_position;
+    if (nh.getParam("initialpose", ros_param_position))
+    {
+        p.x = ros_param_position["x"];
+        p.y = ros_param_position["y"];
+        yaw = ros_param_position["yaw"];
+    }
+    else if (config.readGroup("initial_pose", tue::OPTIONAL))
+    {
         config.value("x", p.x);
         config.value("y", p.y);
         config.value("rz", yaw);
-
-        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                     yaw - 0.1, yaw + 0.1, 0.05);
-
         config.endGroup();
     }
 
-    // Getting last pose from parameter server
-
-    std::map<std::string, double> position;
-    if (nh.getParam("initialpose", position))
-    {
-        geo::Vec2 p;
-        double yaw;
-
-        p.x = position["x"];
-        p.y = position["y"];
-        yaw = position["yaw"];
-
-        geometry_msgs::PoseWithCovarianceStampedPtr initpose_ptr(new geometry_msgs::PoseWithCovarianceStamped());
-
-        tf::Matrix3x3 M_tf;
-        M_tf.setEulerYPR(yaw, 0.0, 0.0);
-        tf::Quaternion q_tf;
-        M_tf.getRotation(q_tf);
-        tf::quaternionTFToMsg(q_tf, initpose_ptr->pose.pose.orientation);
-
-        initpose_ptr->pose.pose.position.x = p.x;
-        initpose_ptr->pose.pose.position.y = p.y;
-        initpose_ptr->header.frame_id = map_frame_id_;
-        initpose_ptr->header.stamp = ros::Time::now();
-
-        initialPoseCallback(initpose_ptr);
-    }
+    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
+                                    yaw - 0.1, yaw + 0.1, 0.05);
 
     config.value("robot_name", robot_name_);
 
