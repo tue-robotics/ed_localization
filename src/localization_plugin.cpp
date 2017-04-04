@@ -112,23 +112,20 @@ void LocalizationPlugin::configure(tue::Configuration config)
         p.y = position["y"];
         yaw = position["yaw"];
 
-        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                     yaw - 0.1, yaw + 0.1, 0.05);
-
-        geometry_msgs::PoseWithCovarianceStamped initpose_param_msg;
+        geometry_msgs::PoseWithCovarianceStampedPtr initpose_ptr(new geometry_msgs::PoseWithCovarianceStamped());
 
         tf::Matrix3x3 M_tf;
         M_tf.setEulerYPR(yaw, 0.0, 0.0);
         tf::Quaternion q_tf;
         M_tf.getRotation(q_tf);
-        tf::quaternionTFToMsg(q_tf, initpose_param_msg.pose.pose.orientation);
+        tf::quaternionTFToMsg(q_tf, initpose_ptr->pose.pose.orientation);
 
-        initpose_param_msg.pose.pose.position.x = p.x;
-        initpose_param_msg.pose.pose.position.y = p.y;
-        initpose_param_msg.header.frame_id = map_frame_id_;
-        initpose_param_msg.header.stamp = ros::Time::now();
+        initpose_ptr->pose.pose.position.x = p.x;
+        initpose_ptr->pose.pose.position.y = p.y;
+        initpose_ptr->header.frame_id = map_frame_id_;
+        initpose_ptr->header.stamp = ros::Time::now();
 
-        boost::bind(&LocalizationPlugin::initialPoseCallback, this, initpose_param_msg);
+        initialPoseCallback(initpose_ptr);
     }
 
     config.value("robot_name", robot_name_);
