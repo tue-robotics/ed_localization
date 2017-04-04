@@ -29,6 +29,13 @@ LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_off
 
 LocalizationPlugin::~LocalizationPlugin()
 {
+    // Saving last pose in parameter server
+    Transform last_pose = particle_filter_.bestSample().pose;
+
+    ros::NodeHandle nh;
+    nh.setParam("initialpose/x", last_pose.translation().x);
+    nh.setParam("initialpose/y", last_pose.translation().y);
+    nh.setParam("initialpose/yaw", last_pose.rotation());
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -78,20 +85,28 @@ void LocalizationPlugin::configure(tue::Configuration config)
         sub_initial_pose_ = nh.subscribe(sub_opts);
     }
 
-    if (config.readGroup("initial_pose", tue::OPTIONAL))
-    {
-        geo::Vec2 p;
-        double yaw;
+    // Initial pose
+    geo::Vec2 p; p.x = 0; p.y = 0;
+    double yaw = 0;
 
+    // Getting last pose from parameter server
+    std::map<std::string, double> ros_param_position;
+    if (nh.getParam("initialpose", ros_param_position))
+    {
+        p.x = ros_param_position["x"];
+        p.y = ros_param_position["y"];
+        yaw = ros_param_position["yaw"];
+    }
+    else if (config.readGroup("initial_pose", tue::OPTIONAL))
+    {
         config.value("x", p.x);
         config.value("y", p.y);
         config.value("rz", yaw);
-
-        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                     yaw - 0.1, yaw + 0.1, 0.05);
-
         config.endGroup();
     }
+
+    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
+                                    yaw - 0.1, yaw + 0.1, 0.05);
 
     config.value("robot_name", robot_name_);
 
@@ -142,7 +157,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 // ----------------------------------------------------------------------------------------------------
 
 TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const ed::WorldModel& world, ed::UpdateRequest& req)
-{    
+{
     if (!laser_offset_initialized_)
     {
         tf::StampedTransform p_laser;
