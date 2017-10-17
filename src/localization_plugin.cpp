@@ -32,6 +32,8 @@ LocalizationPlugin::~LocalizationPlugin()
     // Saving last pose in parameter server
     Transform last_pose = particle_filter_.bestSample().pose;
 
+    // ToDo: get transform between map and odom (instead of map and base link as is done above) and store this on the parameter server
+
     ros::NodeHandle nh;
     nh.setParam("initialpose/x", last_pose.translation().x);
     nh.setParam("initialpose/y", last_pose.translation().y);
@@ -96,6 +98,12 @@ void LocalizationPlugin::configure(tue::Configuration config)
         p.x = ros_param_position["x"];
         p.y = ros_param_position["y"];
         yaw = ros_param_position["yaw"];
+
+        // ToDo: read transform between map and odom (instead of map and base link as described above)
+        // ToDo: based on loaded transform between map and odom and current transform between odom and base link,
+        // compute px. py and yaw to use in the initial pose
+
+        // Check http://wiki.ros.org/tf for inspiration
     }
     else if (config.readGroup("initial_pose", tue::OPTIONAL))
     {
