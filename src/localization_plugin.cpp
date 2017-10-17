@@ -34,6 +34,16 @@ LocalizationPlugin::~LocalizationPlugin()
 
     // ToDo: get transform between map and odom (instead of map and base link as is done above) and store this on the parameter server
 
+    tf::StampedTransform tf_map_odom;
+    tf_listener_->lookupTransform(odom_frame_id_, map_frame_id_, ros::Time::now(), tf_map_odom);
+    // ToDo: check ros::Time (we want the latest available transform)
+    tf::Vector3 pos = tf_map_odom.getOrigin(); // Returns a vector // ToDo --> get the x, y
+    ROS_INFO("x: %.2f, y: %.2f", pos.x(), pos.y());
+    std::cout << "x: " << pos.x() << ", y: " << pos.y() << std::endl;
+
+    // ToDo: similar: get rotation and get the yaw
+
+
     ros::NodeHandle nh;
     nh.setParam("initialpose/x", last_pose.translation().x);
     nh.setParam("initialpose/y", last_pose.translation().y);
