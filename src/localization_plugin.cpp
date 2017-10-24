@@ -29,25 +29,18 @@ LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_off
 
 LocalizationPlugin::~LocalizationPlugin()
 {
-    // Saving last pose in parameter server
-    Transform last_pose = particle_filter_.bestSample().pose;
 
-    // ToDo: get transform between map and odom (instead of map and base link as is done above) and store this on the parameter server
-
+    // Get transform between map and odom and store this on the parameter server
     tf::StampedTransform tf_map_odom;
-    tf_listener_->lookupTransform(odom_frame_id_, map_frame_id_, ros::Time::now(), tf_map_odom);
-    // ToDo: check ros::Time (we want the latest available transform)
-    tf::Vector3 pos = tf_map_odom.getOrigin(); // Returns a vector // ToDo --> get the x, y
-    ROS_INFO("x: %.2f, y: %.2f", pos.x(), pos.y());
-    std::cout << "x: " << pos.x() << ", y: " << pos.y() << std::endl;
-
-    // ToDo: similar: get rotation and get the yaw
-
+    tf_listener_->lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0), tf_map_odom);
+    tf::Vector3 pos_map_odom = tf_map_odom.getOrigin(); // Returns a vector
+    tf::Quaternion rotation_map_odom = tf_map_odom.getRotation(); // Returns a vector of rotation in quaternion
+    double yaw_map_odom = tf::getYaw(rotation_map_odom);
 
     ros::NodeHandle nh;
-    nh.setParam("initialpose/x", last_pose.translation().x);
-    nh.setParam("initialpose/y", last_pose.translation().y);
-    nh.setParam("initialpose/yaw", last_pose.rotation());
+    nh.setParam("initialpose/x", pos_map_odom.x());
+    nh.setParam("initialpose/y", pos_map_odom.y());
+    nh.setParam("initialpose/yaw", yaw_map_odom);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -105,6 +98,16 @@ void LocalizationPlugin::configure(tue::Configuration config)
     std::map<std::string, double> ros_param_position;
     if (nh.getParam("initialpose", ros_param_position))
     {
+        // Get transform between odom and base link
+        tf::StampedTransform tf_odom_base_link;
+        tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
+
+        tf::Vector3 pos_odom_base_link = tf_odom_base_link.getOrigin();
+        tf::Quaternion rotation_odom_base_link = tf_odom_base_link.getRotation();
+        double yaw_odom_base_link= tf::getYaw(rotation_odom_base_link);
+
+
+
         p.x = ros_param_position["x"];
         p.y = ros_param_position["y"];
         yaw = ros_param_position["yaw"];
