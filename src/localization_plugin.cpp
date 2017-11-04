@@ -30,13 +30,14 @@ LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_off
 LocalizationPlugin::~LocalizationPlugin()
 {
 
-    // Get transform between map and odom and store this on the parameter server
+    // Get transform between map and odom frame
     tf::StampedTransform tf_map_odom;
     tf_listener_->lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0), tf_map_odom);
     tf::Vector3 pos_map_odom = tf_map_odom.getOrigin(); // Returns a vector
-    tf::Quaternion rotation_map_odom = tf_map_odom.getRotation(); // Returns a vector of rotation in quaternion
+    tf::Quaternion rotation_map_odom = tf_map_odom.getRotation(); // Returns a quaternion
     double yaw_map_odom = tf::getYaw(rotation_map_odom);
 
+    // Store the x, y and yaw on the parameter server
     ros::NodeHandle nh;
     nh.setParam("initialpose/x", pos_map_odom.x());
     nh.setParam("initialpose/y", pos_map_odom.y());
@@ -47,6 +48,12 @@ LocalizationPlugin::~LocalizationPlugin()
 
 void LocalizationPlugin::configure(tue::Configuration config)
 {
+    delete tf_listener_;
+    tf_listener_ = new tf::TransformListener;
+
+    delete tf_broadcaster_;
+    tf_broadcaster_ = new tf::TransformBroadcaster;
+
     std::string laser_topic;
 
     if (config.readGroup("odom_model", tue::REQUIRED))
@@ -99,35 +106,28 @@ void LocalizationPlugin::configure(tue::Configuration config)
     if (nh.getParam("initialpose", ros_param_position))
     {
 
-        //Make a homogeneous transformation
+        //Make a homogeneous transformation with the variables from the parameter server
         tf::Transform homogtrans_map_odom;
-        homogtrans_map_odom.setOrigin( tf::Vector3(ros_param_position["x"], ros_param_position["y"], 0.0) );
+        homogtrans_map_odom.setOrigin(tf::Vector3(ros_param_position["x"], ros_param_position["y"], 0.0));
         tf::Quaternion q_map_odom;
         q_map_odom.setRPY(0, 0, ros_param_position["yaw"]);
         homogtrans_map_odom.setRotation(q_map_odom);
 
-
-        // Get transform between odom and base link
+        // Get homogeneous transformation between odom and base link frame
         tf::StampedTransform tf_odom_base_link;
         tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
-        //tf:: Transform homogtrans_odom_base_link;
-        //homogtrans_odom_base_link.setOrigin(tf_odom_base_link.getOrigin());
-        //homogtrans_odom_base_link.setRotation(tf_odom_base_link.getRotation());
 
-
-        // Calculate baselink position in map frame
-        tf::Vector3 pos_map_baselink = homogtrans_map_odom*tf_odom_base_link.getOrigin(); // Returns a vector
-        tf::Quaternion rotation_map_baselink = homogtrans_map_odom*tf_odom_base_link.getRotation(); // Returns a vector of rotation in quaternion
+        // Calculate base link position in map frame
+        tf::Transform tf_map_base_link = homogtrans_map_odom*tf_odom_base_link;
+        tf::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
+        tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a vector of rotation in quaternion
 
         p.x = pos_map_baselink.x();
         p.y = pos_map_baselink.y();
         yaw = tf::getYaw(rotation_map_baselink);
 
-        // ToDo: read transform between map and odom (instead of map and base link as described above)
-        // ToDo: based on loaded transform between map and odom and current transform between odom and base link,
-        // compute px. py and yaw to use in the initial pose
+        ROS_DEBUG_STREAM("Initial pose from parameter server: [" << p.x << ", " << p.y << "], yaw:" << yaw);
 
-        // Check http://wiki.ros.org/tf for inspiration
     }
     else if (config.readGroup("initial_pose", tue::OPTIONAL))
     {
@@ -141,12 +141,6 @@ void LocalizationPlugin::configure(tue::Configuration config)
                                     yaw - 0.1, yaw + 0.1, 0.05);
 
     config.value("robot_name", robot_name_);
-
-    delete tf_listener_;
-    tf_listener_ = new tf::TransformListener;
-
-    delete tf_broadcaster_;
-    tf_broadcaster_ = new tf::TransformBroadcaster;
 
     pub_particles_ = nh.advertise<geometry_msgs::PoseArray>("ed/localization/particles", 10);
 }
