@@ -120,7 +120,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
         // Calculate base link position in map frame
         tf::Transform tf_map_base_link = homogtrans_map_odom*tf_odom_base_link;
         tf::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
-        tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a vector of rotation in quaternion
+        tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a quaternion
 
         p.x = pos_map_baselink.x();
         p.y = pos_map_baselink.y();
