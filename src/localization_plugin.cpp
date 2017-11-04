@@ -98,19 +98,30 @@ void LocalizationPlugin::configure(tue::Configuration config)
     std::map<std::string, double> ros_param_position;
     if (nh.getParam("initialpose", ros_param_position))
     {
+
+        //Make a homogeneous transformation
+        tf::Transform homogtrans_map_odom;
+        homogtrans_map_odom.setOrigin( tf::Vector3(ros_param_position["x"], ros_param_position["y"], 0.0) );
+        tf::Quaternion q_map_odom;
+        q_map_odom.setRPY(0, 0, ros_param_position["yaw"]);
+        homogtrans_map_odom.setRotation(q_map_odom);
+
+
         // Get transform between odom and base link
         tf::StampedTransform tf_odom_base_link;
         tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
-
-        tf::Vector3 pos_odom_base_link = tf_odom_base_link.getOrigin();
-        tf::Quaternion rotation_odom_base_link = tf_odom_base_link.getRotation();
-        double yaw_odom_base_link= tf::getYaw(rotation_odom_base_link);
-
+        //tf:: Transform homogtrans_odom_base_link;
+        //homogtrans_odom_base_link.setOrigin(tf_odom_base_link.getOrigin());
+        //homogtrans_odom_base_link.setRotation(tf_odom_base_link.getRotation());
 
 
-        p.x = ros_param_position["x"];
-        p.y = ros_param_position["y"];
-        yaw = ros_param_position["yaw"];
+        // Calculate baselink position in map frame
+        tf::Vector3 pos_map_baselink = homogtrans_map_odom*tf_odom_base_link.getOrigin(); // Returns a vector
+        tf::Quaternion rotation_map_baselink = homogtrans_map_odom*tf_odom_base_link.getRotation(); // Returns a vector of rotation in quaternion
+
+        p.x = pos_map_baselink.x();
+        p.y = pos_map_baselink.y();
+        yaw = tf::getYaw(rotation_map_baselink);
 
         // ToDo: read transform between map and odom (instead of map and base link as described above)
         // ToDo: based on loaded transform between map and odom and current transform between odom and base link,
