@@ -60,15 +60,6 @@ public:
 
     ~ParticleFilter();
 
-    /**
-     * @brief initUniform
-     * @param min vector in map frame
-     * @param max vector in map frame
-     * @param t_step
-     * @param a_min
-     * @param a_max
-     * @param a_step
-     */
     void initUniform(const geo::Vec2& min, const geo::Vec2& max, double t_step,
                      double a_min, double a_max, double a_step);
 
