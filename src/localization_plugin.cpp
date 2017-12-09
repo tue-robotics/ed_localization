@@ -115,7 +115,27 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
         // Get homogeneous transformation between odom and base link frame
         tf::StampedTransform tf_odom_base_link;
-        tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
+
+        //Set to zero, in case of error when looking up, because can't break an if loop in case of error.
+        tf_odom_base_link.frame_id_ = odom_frame_id_;
+        tf_odom_base_link.child_frame_id_ = base_link_frame_id_;
+        tf_odom_base_link.stamp_ = ros::Time::now();
+        tf_odom_base_link.setOrigin(tf::Vector3(0,0,0));
+        tf_odom_base_link.setRotation(tf::Quaternion(0,0,0,0));
+
+        if (tf_listener_->waitForTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(5)))
+        {
+            try
+            {
+                tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
+            }
+            catch (tf::TransformException ex)
+            {
+                ROS_ERROR("[ED Localisation] %s",ex.what());
+            }
+        }
+        else
+            ROS_ERROR("[ED Localisation] no transform between odom and base_link.");
 
         // Calculate base link position in map frame
         tf::Transform tf_map_base_link = homogtrans_map_odom*tf_odom_base_link;
