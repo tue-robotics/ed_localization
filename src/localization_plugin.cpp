@@ -116,7 +116,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
         // Get homogeneous transformation between odom and base link frame
         tf::StampedTransform tf_odom_base_link;
 
-        //Set to zero, in case of error when looking up, because can't break an if loop in case of error.
+        //Set to zero, in case of error when looking up, because can't break an if loop in case of error, so we need to proceed with empty transform.
         tf_odom_base_link.frame_id_ = odom_frame_id_;
         tf_odom_base_link.child_frame_id_ = base_link_frame_id_;
         tf_odom_base_link.stamp_ = ros::Time::now();
