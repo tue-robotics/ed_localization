@@ -21,7 +21,7 @@
 // ----------------------------------------------------------------------------------------------------
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_offset_initialized_(false),
-    tf_listener_(), tf_broadcaster_(0)
+    tf_listener_(0), tf_broadcaster_(0)
 {
 }
 
@@ -42,17 +42,20 @@ LocalizationPlugin::~LocalizationPlugin()
     nh.setParam("initialpose/x", pos_map_odom.x());
     nh.setParam("initialpose/y", pos_map_odom.y());
     nh.setParam("initialpose/yaw", yaw_map_odom);
+
+    delete tf_listener_;
+    delete tf_broadcaster_;
 }
 
 // ----------------------------------------------------------------------------------------------------
 
 void LocalizationPlugin::configure(tue::Configuration config)
 {
-    delete tf_listener_;
-    tf_listener_ = new tf::TransformListener;
+    if (!tf_listener_)
+        tf_listener_ = new tf::TransformListener;
 
-    delete tf_broadcaster_;
-    tf_broadcaster_ = new tf::TransformBroadcaster;
+    if (!tf_broadcaster_)
+        tf_broadcaster_ = new tf::TransformBroadcaster;
 
     std::string laser_topic;
 
@@ -105,7 +108,6 @@ void LocalizationPlugin::configure(tue::Configuration config)
     std::map<std::string, double> ros_param_position;
     if (nh.getParam("initialpose", ros_param_position))
     {
-
         //Make a homogeneous transformation with the variables from the parameter server
         tf::Transform homogtrans_map_odom;
         homogtrans_map_odom.setOrigin(tf::Vector3(ros_param_position["x"], ros_param_position["y"], 0.0));
