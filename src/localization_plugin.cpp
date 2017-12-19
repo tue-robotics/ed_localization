@@ -117,17 +117,21 @@ void LocalizationPlugin::configure(tue::Configuration config)
         tf::StampedTransform tf_odom_base_link;
 
         //Set to zero, in case of error when looking up, because can't break an if loop in case of error, so we need to proceed with empty transform.
-        tf_odom_base_link.frame_id_ = odom_frame_id_;
-        tf_odom_base_link.child_frame_id_ = base_link_frame_id_;
-        tf_odom_base_link.stamp_ = ros::Time::now();
-        tf_odom_base_link.setOrigin(tf::Vector3(0,0,0));
-        tf_odom_base_link.setRotation(tf::Quaternion(0,0,0,0));
-
-        if (tf_listener_->waitForTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(5)))
+        if (tf_listener_->waitForTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
         {
             try
             {
                 tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
+                // Calculate base link position in map frame
+                tf::Transform tf_map_base_link = homogtrans_map_odom*tf_odom_base_link;
+                tf::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
+                tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a quaternion
+
+                p.x = pos_map_baselink.x();
+                p.y = pos_map_baselink.y();
+                yaw = tf::getYaw(rotation_map_baselink);
+
+                ROS_DEBUG_STREAM("Initial pose from parameter server: [" << p.x << ", " << p.y << "], yaw:" << yaw);
             }
             catch (tf::TransformException ex)
             {
@@ -136,17 +140,6 @@ void LocalizationPlugin::configure(tue::Configuration config)
         }
         else
             ROS_ERROR("[ED Localisation] no transform between odom and base_link.");
-
-        // Calculate base link position in map frame
-        tf::Transform tf_map_base_link = homogtrans_map_odom*tf_odom_base_link;
-        tf::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
-        tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a quaternion
-
-        p.x = pos_map_baselink.x();
-        p.y = pos_map_baselink.y();
-        yaw = tf::getYaw(rotation_map_baselink);
-
-        ROS_DEBUG_STREAM("Initial pose from parameter server: [" << p.x << ", " << p.y << "], yaw:" << yaw);
 
     }
     else if (config.readGroup("initial_pose", tue::OPTIONAL))
