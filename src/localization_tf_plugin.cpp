@@ -19,7 +19,7 @@
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationTFPlugin::LocalizationTFPlugin() : tf_listener_()
+LocalizationTFPlugin::LocalizationTFPlugin() : tf_listener_(nullptr)
 {
 }
 
