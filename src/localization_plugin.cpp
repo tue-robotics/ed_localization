@@ -21,7 +21,7 @@
 // ----------------------------------------------------------------------------------------------------
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_offset_initialized_(false),
-    tf_listener_(0), tf_broadcaster_(0)
+    tf_listener_(nullptr), tf_broadcaster_(nullptr)
 {
 }
 
