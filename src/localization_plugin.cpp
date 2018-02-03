@@ -108,7 +108,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
     std::map<std::string, double> ros_param_position;
     if (nh.getParam("initialpose", ros_param_position))
     {
-        //Make a homogeneous transformation with the variables from the parameter server
+        // Make a homogeneous transformation with the variables from the parameter server
         tf::Transform homogtrans_map_odom;
         homogtrans_map_odom.setOrigin(tf::Vector3(ros_param_position["x"], ros_param_position["y"], 0.0));
         tf::Quaternion q_map_odom;
@@ -117,18 +117,31 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
         // Get homogeneous transformation between odom and base link frame
         tf::StampedTransform tf_odom_base_link;
-        tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
 
-        // Calculate base link position in map frame
-        tf::Transform tf_map_base_link = homogtrans_map_odom*tf_odom_base_link;
-        tf::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
-        tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a quaternion
+        // Set to zero, in case of error when looking up, because can't break an if loop in case of error, so we need to proceed with empty transform.
+        if (tf_listener_->waitForTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
+        {
+            try
+            {
+                tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
+                // Calculate base link position in map frame
+                tf::Transform tf_map_base_link = homogtrans_map_odom * tf_odom_base_link;
+                tf::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
+                tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a quaternion
 
-        p.x = pos_map_baselink.x();
-        p.y = pos_map_baselink.y();
-        yaw = tf::getYaw(rotation_map_baselink);
+                p.x = pos_map_baselink.x();
+                p.y = pos_map_baselink.y();
+                yaw = tf::getYaw(rotation_map_baselink);
 
-        ROS_DEBUG_STREAM("Initial pose from parameter server: [" << p.x << ", " << p.y << "], yaw:" << yaw);
+                ROS_DEBUG_STREAM("Initial pose from parameter server: [" << p.x << ", " << p.y << "], yaw:" << yaw);
+            }
+            catch (tf::TransformException ex)
+            {
+                ROS_ERROR("[ED Localization] %s",ex.what());
+            }
+        }
+        else
+            ROS_ERROR("[ED Localization] no transform between odom and base_link.");
 
     }
     else if (config.readGroup("initial_pose", tue::OPTIONAL))
@@ -140,7 +153,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
     }
 
     particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                    yaw - 0.1, yaw + 0.1, 0.05);
+                                 yaw - 0.1, yaw + 0.1, 0.05);
 
     config.value("robot_name", robot_name_);
 
