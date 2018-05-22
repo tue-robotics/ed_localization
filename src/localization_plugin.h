@@ -77,6 +77,9 @@ private:
     bool have_previous_pose_;
     geo::Pose3D previous_pose_;
 
+    geo::Vec2 update_window_min_;
+    geo::Vec2 update_window_max_;
+
     ros::Subscriber sub_initial_pose_;
 
     geometry_msgs::PoseWithCovarianceStampedConstPtr initial_pose_msg_;

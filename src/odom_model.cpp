@@ -52,7 +52,7 @@ void OdomModel::configure(tue::Configuration config)
 
 // ----------------------------------------------------------------------------------------------------
 
-void OdomModel::updatePoses(const Transform& movement, double dt, ParticleFilter& pf)
+void OdomModel::updatePoses(const Transform& movement, double dt, ParticleFilter& pf, bool freeze_particles)
 {
     double delta_trans_sq = movement.translation().length2();
 
@@ -68,15 +68,22 @@ void OdomModel::updatePoses(const Transform& movement, double dt, ParticleFilter
     {
         Sample& sample = *it;
 
-        // Sample pose differences
-        double delta_trans_hat = generateRandomGaussian(trans_hat_stddev);
-        double delta_rot_hat = generateRandomGaussian(rot_hat_stddev);
-        double delta_strafe_hat = generateRandomGaussian(strafe_hat_stddev);
+        if (freeze_particles)
+        {
+            sample.pose.set(sample.pose.matrix() * movement.matrix());
+        }
+        else
+        {
+            // Sample pose differences
+            double delta_trans_hat = generateRandomGaussian(trans_hat_stddev);
+            double delta_rot_hat = generateRandomGaussian(rot_hat_stddev);
+            double delta_strafe_hat = generateRandomGaussian(strafe_hat_stddev);
 
-        geo::Transform2 noise;
-        noise.t = geo::Vec2(delta_trans_hat, delta_strafe_hat);
-        noise.setRotation(delta_rot_hat);
+            geo::Transform2 noise;
+            noise.t = geo::Vec2(delta_trans_hat, delta_strafe_hat);
+            noise.setRotation(delta_rot_hat);
 
-        sample.pose.set(sample.pose.matrix() * movement.matrix() * noise);
+            sample.pose.set(sample.pose.matrix() * movement.matrix() * noise);
+        }
     }
 }

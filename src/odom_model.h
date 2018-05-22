@@ -17,7 +17,7 @@ public:
 
     void configure(tue::Configuration config);
 
-    void updatePoses(const Transform& movement, double dt, ParticleFilter& pf);
+    void updatePoses(const Transform& movement, double dt, ParticleFilter& pf, bool freeze_particles=false);
 
 private:
 

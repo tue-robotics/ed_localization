@@ -21,7 +21,7 @@
 // ----------------------------------------------------------------------------------------------------
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_offset_initialized_(false),
-    tf_listener_(0), tf_broadcaster_(0)
+    tf_listener_(0), tf_broadcaster_(0), update_window_min_(geo::Vec2(-1e9, -1e9)), update_window_max_(1e9, 1e9)
 {
 }
 
@@ -75,6 +75,17 @@ void LocalizationPlugin::configure(tue::Configuration config)
         laser_model_.configure(config);
         config.endGroup();
     }
+
+    if (config.readGroup("update_window", tue::OPTIONAL))
+    {
+        config.value("min_x", update_window_min_.x, tue::REQUIRED);
+        config.value("min_y", update_window_min_.y, tue::REQUIRED);
+        config.value("max_x", update_window_max_.x, tue::REQUIRED);
+        config.value("max_y", update_window_max_.y, tue::REQUIRED);
+        config.endGroup();
+    }
+    ROS_INFO("Using the following bounds to update the filter: (%.2f, %.2f)x(%.2f, %.2f)", update_window_min_.x,
+             update_window_max_.x, update_window_min_.y, update_window_max_.y);
 
     config.value("num_particles", num_particles_);
 
@@ -265,31 +276,45 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     if (particle_filter_.samples().empty())
         return UNKNOWN_ERROR;
 
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Update motion
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    odom_model_.updatePoses(movement, 0, particle_filter_);
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Update sensor
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 //    tue::Timer timer;
 //    timer.start();
+    geo::Transform2 previous_mean_pose = particle_filter_.calculateMeanPose();
 
-    laser_model_.updateWeights(world, *scan, particle_filter_);
+    if (previous_mean_pose.t.x > update_window_min_.x && previous_mean_pose.t.x < update_window_max_.x &&
+        previous_mean_pose.t.y > update_window_min_.y && previous_mean_pose.t.y < update_window_max_.y)
+    {
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // -     Update motion
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-//    std::cout << "----------" << std::endl;
-//    std::cout << "Number of lines = " << laser_model_.lines_start().size() << std::endl;
-//    std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
-//    std::cout << "Time per sample = " << timer.getElapsedTimeInMilliSec() / particle_filter_.samples().size() << " ms" << std::endl;
+        odom_model_.updatePoses(movement, 0, particle_filter_);
 
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     (Re)sample
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // -     Update sensor
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    particle_filter_.resample(num_particles_);
+        laser_model_.updateWeights(world, *scan, particle_filter_);
+
+        //    std::cout << "----------" << std::endl;
+        //    std::cout << "Number of lines = " << laser_model_.lines_start().size() << std::endl;
+        //    std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
+        //    std::cout << "Time per sample = " << timer.getElapsedTimeInMilliSec() / particle_filter_.samples().size() << " ms" << std::endl;
+
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // -     (Re)sample
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+        particle_filter_.resample(num_particles_);
+    }
+    else
+    {
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // -     Update motion, freeze particles
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+        odom_model_.updatePoses(movement, 0, particle_filter_, true);
+    }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Publish result
