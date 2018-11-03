@@ -59,7 +59,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
     std::string laser_topic;
 
-    if (config.readGroup("odom_model", tue::REQUIRED))
+    if (config.readGroup("odom_model", tue::config::REQUIRED))
     {
         config.value("map_frame", map_frame_id_);
         config.value("odom_frame", odom_frame_id_);
@@ -69,7 +69,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
         config.endGroup();
     }
 
-    if (config.readGroup("laser_model", tue::REQUIRED))
+    if (config.readGroup("laser_model", tue::config::REQUIRED))
     {
         config.value("topic", laser_topic);
         laser_model_.configure(config);
@@ -90,7 +90,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
     sub_laser_ = nh.subscribe(sub_options);
 
     std::string initial_pose_topic;
-    if (config.value("initial_pose_topic", initial_pose_topic, tue::OPTIONAL))
+    if (config.value("initial_pose_topic", initial_pose_topic, tue::config::OPTIONAL))
     {
         // Subscribe to initial pose topic
 
@@ -144,7 +144,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
             ROS_ERROR("[ED Localization] no transform between odom and base_link.");
 
     }
-    else if (config.readGroup("initial_pose", tue::OPTIONAL))
+    else if (config.readGroup("initial_pose", tue::config::OPTIONAL))
     {
         config.value("x", p.x);
         config.value("y", p.y);
