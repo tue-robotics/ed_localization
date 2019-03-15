@@ -32,16 +32,24 @@ LocalizationPlugin::~LocalizationPlugin()
 
     // Get transform between map and odom frame
     tf::StampedTransform tf_map_odom;
-    tf_listener_->lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0), tf_map_odom);
-    tf::Vector3 pos_map_odom = tf_map_odom.getOrigin(); // Returns a vector
-    tf::Quaternion rotation_map_odom = tf_map_odom.getRotation(); // Returns a quaternion
-    double yaw_map_odom = tf::getYaw(rotation_map_odom);
+    try
+    {
+        std::cout << "Storing current Transform" << std::endl;
+        tf_listener_->lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0), tf_map_odom);
+        tf::Vector3 pos_map_odom = tf_map_odom.getOrigin(); // Returns a vector
+        tf::Quaternion rotation_map_odom = tf_map_odom.getRotation(); // Returns a quaternion
+        double yaw_map_odom = tf::getYaw(rotation_map_odom);
 
-    // Store the x, y and yaw on the parameter server
-    ros::NodeHandle nh;
-    nh.setParam("initialpose/x", pos_map_odom.x());
-    nh.setParam("initialpose/y", pos_map_odom.y());
-    nh.setParam("initialpose/yaw", yaw_map_odom);
+        // Store the x, y and yaw on the parameter server
+        ros::NodeHandle nh;
+        nh.setParam("initialpose/x", pos_map_odom.x());
+        nh.setParam("initialpose/y", pos_map_odom.y());
+        nh.setParam("initialpose/yaw", yaw_map_odom);
+    }
+    catch (tf::TransformException ex)
+    {
+        ROS_ERROR("[ED Localization] %s",ex.what());
+    }
 
     delete tf_listener_;
     delete tf_broadcaster_;
@@ -56,6 +64,8 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
     if (!tf_broadcaster_)
         tf_broadcaster_ = new tf::TransformBroadcaster;
+
+    std::cout << config.data() << std::endl;
 
     std::string laser_topic;
 
@@ -123,6 +133,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
         {
             try
             {
+                std::cout << "Configure" << std::endl;
                 tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
                 // Calculate base link position in map frame
                 tf::Transform tf_map_base_link = homogtrans_map_odom * tf_odom_base_link;
@@ -423,6 +434,7 @@ TransformStatus LocalizationPlugin::transform(const std::string& target_frame, c
 {
     try
     {
+        std::cout << "Transform" << std::endl;
         tf_listener_->lookupTransform(target_frame, source_frame, time, transform);
         return OK;
     }
@@ -434,6 +446,7 @@ TransformStatus LocalizationPlugin::transform(const std::string& target_frame, c
             // (i.e., the scan is too old or too new, respectively)
 
             tf::StampedTransform latest_transform;
+            std::cout << "Transform2" << std::endl;
             tf_listener_->lookupTransform(target_frame, source_frame, ros::Time(0), latest_transform);
 
             if (scan_buffer_.front()->header.stamp > latest_transform.stamp_)
