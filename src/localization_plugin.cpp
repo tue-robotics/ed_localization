@@ -31,17 +31,24 @@ LocalizationPlugin::~LocalizationPlugin()
 {
 
     // Get transform between map and odom frame
-    tf::StampedTransform tf_map_odom;
-    tf_listener_->lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0), tf_map_odom);
-    tf::Vector3 pos_map_odom = tf_map_odom.getOrigin(); // Returns a vector
-    tf::Quaternion rotation_map_odom = tf_map_odom.getRotation(); // Returns a quaternion
-    double yaw_map_odom = tf::getYaw(rotation_map_odom);
+    try
+    {
+        tf::StampedTransform tf_map_odom;
+        tf_listener_->lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0), tf_map_odom);
+        tf::Vector3 pos_map_odom = tf_map_odom.getOrigin(); // Returns a vector
+        tf::Quaternion rotation_map_odom = tf_map_odom.getRotation(); // Returns a quaternion
+        double yaw_map_odom = tf::getYaw(rotation_map_odom);
 
-    // Store the x, y and yaw on the parameter server
-    ros::NodeHandle nh;
-    nh.setParam("initialpose/x", pos_map_odom.x());
-    nh.setParam("initialpose/y", pos_map_odom.y());
-    nh.setParam("initialpose/yaw", yaw_map_odom);
+        // Store the x, y and yaw on the parameter server
+        ros::NodeHandle nh;
+        nh.setParam("initialpose/x", pos_map_odom.x());
+        nh.setParam("initialpose/y", pos_map_odom.y());
+        nh.setParam("initialpose/yaw", yaw_map_odom);
+    }
+    catch (tf::TransformException ex)
+    {
+        ROS_ERROR("[ED Localization] %s",ex.what());
+    }
 
     delete tf_listener_;
     delete tf_broadcaster_;
