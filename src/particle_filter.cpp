@@ -1,5 +1,7 @@
 #include "particle_filter.h"
 
+#include <algorithm>
+
 // ----------------------------------------------------------------------------------------------------
 
 ParticleFilter::ParticleFilter() : i_current_(0)
