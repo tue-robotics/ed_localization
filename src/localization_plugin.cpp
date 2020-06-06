@@ -9,6 +9,9 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <tf/transform_listener.h>
+#include <tf/transform_broadcaster.h>
+
 #include <tue/profiling/timer.h>
 
 #include <geolib/ros/msg_conversions.h>
@@ -21,7 +24,7 @@
 // ----------------------------------------------------------------------------------------------------
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_offset_initialized_(false),
-    tf_listener_(0), tf_broadcaster_(0)
+    tf_listener_(nullptr), tf_broadcaster_(nullptr)
 {
 }
 
@@ -49,9 +52,6 @@ LocalizationPlugin::~LocalizationPlugin()
     {
         ROS_ERROR("[ED Localization] %s",ex.what());
     }
-
-    delete tf_listener_;
-    delete tf_broadcaster_;
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -59,10 +59,10 @@ LocalizationPlugin::~LocalizationPlugin()
 void LocalizationPlugin::configure(tue::Configuration config)
 {
     if (!tf_listener_)
-        tf_listener_ = new tf::TransformListener;
+        tf_listener_ = std::unique_ptr<tf::TransformListener>(new tf::TransformListener);
 
     if (!tf_broadcaster_)
-        tf_broadcaster_ = new tf::TransformBroadcaster;
+        tf_broadcaster_ = std::unique_ptr<tf::TransformBroadcaster>(new tf::TransformBroadcaster);;
 
     std::string laser_topic;
 
@@ -209,7 +209,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     if (!laser_offset_initialized_)
     {
         tf::StampedTransform p_laser;
-        TransformStatus ts = this->transform(base_link_frame_id_, scan->header.frame_id, scan->header.stamp, p_laser);
+        TransformStatus ts = transform(base_link_frame_id_, scan->header.frame_id, scan->header.stamp, p_laser);
 
         if (ts != OK)
             return ts;
