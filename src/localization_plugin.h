@@ -17,13 +17,19 @@
 #include <queue>
 
 // TF
-#include <tf/transform_listener.h>
-#include <tf/transform_broadcaster.h>
+#include <tf/transform_datatypes.h>
 
 // MODELS
 #include "particle_filter.h"
 #include "odom_model.h"
 #include "laser_model.h"
+
+#include <memory>
+
+namespace tf {
+class TransformListener;
+class TransformBroadcaster;
+}
 
 enum TransformStatus
 {
@@ -98,8 +104,8 @@ private:
     std::string odom_frame_id_;
     std::string base_link_frame_id_;
 
-    tf::TransformListener* tf_listener_;
-    tf::TransformBroadcaster* tf_broadcaster_;
+    std::unique_ptr<tf::TransformListener> tf_listener_;
+    std::unique_ptr<tf::TransformBroadcaster> tf_broadcaster_;
 
     TransformStatus update(const sensor_msgs::LaserScanConstPtr& laser_msg_, const ed::WorldModel& world, ed::UpdateRequest& req);
 
