@@ -62,7 +62,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
         tf_listener_ = std::unique_ptr<tf::TransformListener>(new tf::TransformListener);
 
     if (!tf_broadcaster_)
-        tf_broadcaster_ = std::unique_ptr<tf::TransformBroadcaster>(new tf::TransformBroadcaster);;
+        tf_broadcaster_ = std::unique_ptr<tf::TransformBroadcaster>(new tf::TransformBroadcaster);
 
     std::string laser_topic;
 
