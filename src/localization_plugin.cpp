@@ -73,10 +73,10 @@ LocalizationPlugin::~LocalizationPlugin()
 void LocalizationPlugin::configure(tue::Configuration config)
 {
     if (!tf_listener_)
-        tf_listener_ = std::unique_ptr<tf::TransformListener>(new tf::TransformListener);
+        tf_listener_.reset(new tf::TransformListener);
 
     if (!tf_broadcaster_)
-        tf_broadcaster_ = std::unique_ptr<tf::TransformBroadcaster>(new tf::TransformBroadcaster);
+        tf_broadcaster_.reset(new tf::TransformBroadcaster);
 
     std::string laser_topic;
 
