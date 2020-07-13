@@ -414,7 +414,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         geo::convert(pose_3d, particles_msg.poses[i]);
     }
 
-    particles_msg.header.frame_id = "/map";
+    particles_msg.header.frame_id = map_frame_id_;
     particles_msg.header.stamp = scan->header.stamp;
 
     pub_particles_.publish(particles_msg);
