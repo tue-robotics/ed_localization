@@ -19,6 +19,8 @@ include_directories(
 )
 
 add_library(ed_localization_plugin
+  src/kdtree.cpp
+  src/kdtree.h
   src/laser_model.cpp
   src/laser_model.h
   src/localization_plugin.cpp
@@ -27,6 +29,7 @@ add_library(ed_localization_plugin
   src/odom_model.h
   src/particle_filter.cpp
   src/particle_filter.h
+  src/transform.h
 )
 target_link_libraries(ed_localization_plugin ${catkin_LIBRARIES})
 add_dependencies(ed_localization_plugin ${catkin_EXPORTED_TARGETS})
