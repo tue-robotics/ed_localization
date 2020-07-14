@@ -28,6 +28,9 @@ void ParticleFilter::configure(tue::Configuration config)
     config.value("kld_err", kld_err_, tue::config::OPTIONAL);
     config.value("kld_z", kld_z_, tue::config::OPTIONAL);
 
+    limit_cache_.clear();
+    limit_cache_.resize(max_samples_, 0);
+
     std::array<double, 3> cell_size = {0.5, 0.5, 10*M_PI/180};
     config.value("cell_size_x", cell_size[0], tue::config::OPTIONAL);
     config.value("cell_size_y", cell_size[1], tue::config::OPTIONAL);
@@ -134,14 +137,12 @@ void ParticleFilter::resample()
 
 unsigned int ParticleFilter::resampleLimit(unsigned int k)
 {
-    static std::vector<unsigned int> cache;
-    cache.resize(max_samples_, 0);
-    if (cache[k-1] != 0)
-        return cache[k-1];
+    if (limit_cache_[k-1] != 0)
+        return limit_cache_[k-1];
 
     if (k <= 1)
     {
-        cache[k-1] = max_samples_;
+        limit_cache_[k-1] = max_samples_;
         return max_samples_;
     }
 
@@ -154,16 +155,16 @@ unsigned int ParticleFilter::resampleLimit(unsigned int k)
 
     if (n < min_samples_)
     {
-        cache[k-1] = min_samples_;
+        limit_cache_[k-1] = min_samples_;
         return min_samples_;
     }
     if (n > max_samples_)
     {
-        cache[k-1] = min_samples_;
+        limit_cache_[k-1] = min_samples_;
         return max_samples_;
     }
 
-    cache[k-1] = n;
+    limit_cache_[k-1] = n;
     return n;
 }
 
