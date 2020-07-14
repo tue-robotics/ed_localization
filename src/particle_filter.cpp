@@ -134,8 +134,16 @@ void ParticleFilter::resample()
 
 unsigned int ParticleFilter::resampleLimit(unsigned int k)
 {
+    static std::vector<unsigned int> cache;
+    cache.resize(max_samples_, 0);
+    if (cache[k-1] != 0)
+        return cache[k-1];
+
     if (k <= 1)
+    {
+        cache[k-1] = max_samples_;
         return max_samples_;
+    }
 
     // double a = 1;
     double b = 2 / (9 * (static_cast<double>(k - 1)));
@@ -145,10 +153,17 @@ unsigned int ParticleFilter::resampleLimit(unsigned int k)
     unsigned int n = std::ceil((k - 1) / (2 * kld_err_) * x * x * x);
 
     if (n < min_samples_)
+    {
+        cache[k-1] = min_samples_;
         return min_samples_;
+    }
     if (n > max_samples_)
+    {
+        cache[k-1] = min_samples_;
         return max_samples_;
+    }
 
+    cache[k-1] = n;
     return n;
 }
 
