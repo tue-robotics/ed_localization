@@ -62,6 +62,7 @@ private:
     double kld_err_, kld_z_;
     std::vector<Sample> samples_[2];
     std::unique_ptr<KDTree> kd_tree_;
+    std::vector<unsigned int> limit_cache_;
 
     void setUniformWeights();
 
