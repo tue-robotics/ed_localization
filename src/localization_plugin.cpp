@@ -96,7 +96,11 @@ void LocalizationPlugin::configure(tue::Configuration config)
         config.endGroup();
     }
 
-    config.value("num_particles", num_particles_);
+    if (config.readGroup("particle_filter", tue::config::REQUIRED))
+    {
+        particle_filter_.configure(config);
+        config.endGroup();
+    }
 
     double tmp_transform_tolerance = 0.1;
     config.value("transform_tolerance", tmp_transform_tolerance, tue::config::OPTIONAL);
@@ -366,13 +370,14 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // -     (Re)sample
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    particle_filter_.resample(num_particles_);
+    particle_filter_.resample();
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Publish result
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     // Get the best pose (2D)
+    // Convert best pose to 3D
     geo::Transform2 mean_pose = particle_filter_.calculateMeanPose();
 
     // Convert best pose to 3D

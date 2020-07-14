@@ -1,11 +1,43 @@
 #include "particle_filter.h"
 
 #include <algorithm>
+#include <cmath>
+
+#include <ros/console.h>
 
 // ----------------------------------------------------------------------------------------------------
 
-ParticleFilter::ParticleFilter() : i_current_(0)
+ParticleFilter::ParticleFilter() : i_current_(0), min_samples_(0), max_samples_(0), kld_err_(0), kld_z_(0), kd_tree_(nullptr)
 {
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void ParticleFilter::configure(tue::Configuration config)
+{
+    // Extra variable needed as tue::Configuration doesn't support
+    // unisgned interters
+    int min, max;
+    config.value("min_particles", min);
+    config.value("max_particles", max);
+    min_samples_ = min;
+    max_samples_ = max;
+
+    kld_err_ = 0.01;
+    kld_z_ = 0.99;
+    config.value("kld_err", kld_err_, tue::config::OPTIONAL);
+    config.value("kld_z", kld_z_, tue::config::OPTIONAL);
+
+    std::array<double, 3> cell_size = {0.5, 0.5, 10*M_PI/180};
+    config.value("cell_size_x", cell_size[0], tue::config::OPTIONAL);
+    config.value("cell_size_y", cell_size[1], tue::config::OPTIONAL);
+    config.value("cell_size_theta", cell_size[2], tue::config::OPTIONAL);
+
+    kd_tree_.reset(new KDTree(max_samples_, cell_size));
+
+    ROS_INFO_STREAM("[ED Localization] min_samples: " << min_samples_ << ", max_samples: " << max_samples_);
+    ROS_INFO_STREAM("[ED Localization] kld_err: " << kld_err_ << ", kld_z: " << kld_z_);
+    ROS_INFO_STREAM("[ED Localization] cell_size_x: " << cell_size[0] << ", cell_size_y: " << cell_size[1] << ", cell_size_theta: " << cell_size[2]);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -39,7 +71,7 @@ bool compareSamples(const Sample& a, const Sample& b)
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::resample(unsigned int num_samples)
+void ParticleFilter::resample()
 {
     std::vector<Sample>& old_samples = samples_[i_current_];
     std::vector<Sample>& new_samples = samples_[1 - i_current_];
@@ -47,57 +79,77 @@ void ParticleFilter::resample(unsigned int num_samples)
     if (old_samples.empty())
         return;
 
-    if (num_samples == 0)
-        num_samples = old_samples.size();
+    // Build up cumulative probability table for resampling.
+    // TODO: Replace this with a more efficient procedure
+    // (e.g., http://www.network-theory.co.uk/docs/gslref/GeneralDiscreteDistributions.html)
+    std::vector<double> c;
+    c.resize(old_samples.size() + 1, 0);
+    for (uint i=0; i<old_samples.size(); ++i)
+        c[i+1] = c[i]+ old_samples[i].weight;
 
-    // Sort all samples (decreasing weight)
-    std::sort(old_samples.begin(), old_samples.end(), compareSamples);
+    // Create the kd tree for adaptive sampling;
+    kd_tree_->clear();
 
-    int k = 0;
-    new_samples.resize(num_samples);
-    for(std::vector<Sample>::const_iterator it = old_samples.begin(); it != old_samples.end(); ++it)
+    // Draw samples from set a to create set b.
+    double total = 0;
+    new_samples.clear();
+
+    while(new_samples.size() < max_samples_)
     {
-        const Sample& old_sample = *it;
+        new_samples.push_back(Sample());
+        Sample& new_sample = new_samples.back();
 
-        int l = std::min<int>(k + 1 + old_sample.weight * num_samples, num_samples - 1);
+        // Naive discrete event sampler
+        double r = drand48();
+        uint i=0;
+        for(; i<old_samples.size(); ++i)
+        {
+            if((c[i] <= r) && (r < c[i+1]))
+                break;
+        }
 
-        for(int i = k; i <= l; ++i)
-            new_samples[i] = old_sample;
+        Sample& old_sample = old_samples[i];
 
-        k = l + 1;
+        // Add sample to list
+        new_sample.pose = old_sample.pose;
 
-        if (k >= num_samples)
+        new_sample.weight = 1;
+        total += new_sample.weight;
+
+        // Add sample to histogram
+        kd_tree_->insert(new_sample.pose, new_sample.weight);
+
+        // See if we have enough samples yet
+        unsigned int limit = resampleLimit(kd_tree_->getLeafCount());
+        if (new_samples.size() > limit)
             break;
     }
-
-//    // Build up cumulative probability table for resampling.
-//    std::vector<double> cum_weights(old_samples.size());
-//    cum_weights[0] = old_samples[0].weight;
-//    for(unsigned int i = 1; i < old_samples.size(); ++i)
-//        cum_weights[i] = cum_weights[i - 1] + old_samples[i].weight;
-
-//    new_samples.resize(num_samples);
-//    for(std::vector<Sample>::iterator it = new_samples.begin(); it != new_samples.end(); ++it)
-//    {
-//        Sample& new_sample = *it;
-
-//        double r = ((double) rand() / (RAND_MAX));
-
-//        unsigned int i_sample = 0;
-//        for(i_sample = 0; i_sample < old_samples.size(); ++i_sample)
-//        {
-//            if (r < cum_weights[i_sample])
-//                break;
-//        }
-
-//        new_sample = old_samples[i_sample];
-//    }
-
-//    new_samples[0] = best_sample;
 
     i_current_ = 1 - i_current_;
 
     normalize();
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+unsigned int ParticleFilter::resampleLimit(unsigned int k)
+{
+    if (k <= 1)
+        return max_samples_;
+
+    // double a = 1;
+    double b = 2 / (9 * (static_cast<double>(k - 1)));
+    double c = sqrt(2 / (9 * (static_cast<double>(k - 1)))) * kld_z_;
+    double x = 1 - b + c;
+
+    unsigned int n = std::ceil((k - 1) / (2 * kld_err_) * x * x * x);
+
+    if (n < min_samples_)
+        return min_samples_;
+    if (n > max_samples_)
+        return max_samples_;
+
+    return n;
 }
 
 // ----------------------------------------------------------------------------------------------------
