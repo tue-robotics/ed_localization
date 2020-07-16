@@ -171,17 +171,8 @@ KDTreeNode* KDTree::insertNode(const KDTreeNode* parent, KDTreeNode* node, const
         // The keys are not equal, so split this node
         else
         {
-            // Find the dimension with the largest variance and do a mean split
-            int max_split = 0;
-            for (uint i=0; i<3; i++)
-            {
-                int split = abs(key[i] - node->key[i]);
-                if (split > max_split)
-                {
-                    max_split = split;
-                    node->pivot_dim = i;
-                }
-            }
+            // Pivot dimension should be x, y, th, x, y, th, z, etc.
+            node->pivot_dim = node->depth % 3;
 
             node->pivot_value = (key[node->pivot_dim] + node->key[node->pivot_dim]) / 2.;
 
