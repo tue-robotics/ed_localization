@@ -1,7 +1,7 @@
 #include "kdtree.h"
 #include "transform.h"
 
- #include <cmath>
+#include <cmath>
 
 #include <ros/console.h>
 
@@ -34,9 +34,7 @@ KDTree::~KDTree()
 
 void KDTree::clear()
 {
-    root_.reset();
-    for (KDTreeNodePtr ptr : nodes_)
-        ptr.reset();
+    root_ = nullptr;
     leaf_count_ = 0;
     node_count_ = 0;
 }
@@ -57,12 +55,12 @@ void KDTree::cluster()
     unsigned int queue_count = 0;
     unsigned int cluster_count = 0;
 
-    std::vector<KDTreeNodePtr> queue(node_count_);
+    std::vector<KDTreeNode*> queue(node_count_);
 
     // Put all the leaves in a queue
     for (uint i=0; i<node_count_; ++i)
     {
-        KDTreeNodePtr& node = nodes_[i];
+        KDTreeNode* node = &(nodes_[i]);
         if (node->leaf)
         {
             node->cluster = -1;
@@ -72,7 +70,7 @@ void KDTree::cluster()
 
     for (uint i=queue_count; i>0; --i)
     {
-        KDTreeNodePtr& node = queue[i];
+        KDTreeNode* node = queue[i];
 
         // If this node has already been labelled, skip it
         if (node->cluster >= 0)
@@ -92,7 +90,7 @@ int KDTree::getCluster(const Transform& pose)
 {
     std::array<int, 3> key = generateKey(pose);
 
-    KDTreeNodePtr node = findNode(root_, key);
+    KDTreeNode* node = findNode(root_, key);
     if (!node)
         return -1;
     return node->cluster;
@@ -104,7 +102,7 @@ double KDTree::getValue(const Transform& pose)
 {
     std::array<int, 3> key = generateKey(pose);
 
-    KDTreeNodePtr node = findNode(root_, key);
+    KDTreeNode* node = findNode(root_, key);
     if (!node)
         return 0;
     return node->value;
@@ -138,7 +136,7 @@ bool KDTree::equal(const std::array<int, 3>& key_a, const std::array<int, 3>& ke
 
 // ----------------------------------------------------------------------------------------------------
 
-KDTreeNodePtr KDTree::insertNode(const KDTreeNodePtr& parent, KDTreeNodePtr node, const std::array<int, 3>& key, double value)
+KDTreeNode* KDTree::insertNode(const KDTreeNode* parent, KDTreeNode* node, const std::array<int, 3>& key, double value)
 {
     // If the node doesnt exist yet
     if (!node)
@@ -147,8 +145,8 @@ KDTreeNodePtr KDTree::insertNode(const KDTreeNodePtr& parent, KDTreeNodePtr node
         if (node_count_ >= nodes_.capacity())
             nodes_.resize(node_count_ + 10);
 
-        nodes_[node_count_].reset(new KDTreeNode);
-        node = nodes_[node_count_++];
+        nodes_[node_count_] = KDTreeNode();
+        node = &(nodes_[node_count_++]);
         node->leaf = true;
 
         if (!parent)
@@ -217,7 +215,7 @@ KDTreeNodePtr KDTree::insertNode(const KDTreeNodePtr& parent, KDTreeNodePtr node
 
 // ----------------------------------------------------------------------------------------------------
 
-KDTreeNodePtr KDTree::findNode(const KDTreeNodePtr& node, const std::array<int, 3>& key)
+KDTreeNode* KDTree::findNode(KDTreeNode* node, const std::array<int, 3>& key)
 {
     if (node->leaf)
     {
@@ -239,10 +237,10 @@ KDTreeNodePtr KDTree::findNode(const KDTreeNodePtr& node, const std::array<int, 
 
 // ----------------------------------------------------------------------------------------------------
 
-void KDTree::clusterNode(const KDTreeNodePtr& node, int depth)
+void KDTree::clusterNode(const KDTreeNode* node, int depth)
 {
     std::array<int, 3> nkey;
-    KDTreeNodePtr nnode;
+    KDTreeNode* nnode;
     for (uint i=0; i<27; ++i) // all surrounding bins, including yourself
     {
         nkey[0] = node->key[0] + (i / 9) - 1;
