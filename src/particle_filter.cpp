@@ -23,6 +23,9 @@ void ParticleFilter::configure(tue::Configuration config)
     min_samples_ = min;
     max_samples_ = max;
 
+    samples_[0].reserve(max_samples_);
+    samples_[1].reserve(max_samples_);
+
     kld_err_ = 0.01;
     kld_z_ = 0.99;
     config.value("kld_err", kld_err_, tue::config::OPTIONAL);
@@ -94,7 +97,6 @@ void ParticleFilter::resample()
     kd_tree_->clear();
 
     // Draw samples from set a to create set b.
-    double total = 0;
     new_samples.clear();
 
     while(new_samples.size() < max_samples_)
@@ -117,14 +119,12 @@ void ParticleFilter::resample()
         new_sample.pose = old_sample.pose;
 
         new_sample.weight = 1;
-        total += new_sample.weight;
 
         // Add sample to histogram
         kd_tree_->insert(new_sample.pose, new_sample.weight);
 
         // See if we have enough samples yet
-        unsigned int limit = resampleLimit(kd_tree_->getLeafCount());
-        if (new_samples.size() > limit)
+        if (new_samples.size() >= resampleLimit(kd_tree_->getLeafCount()))
             break;
     }
 
