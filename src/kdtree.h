@@ -40,7 +40,7 @@ public:
     int cluster;
 
     // Child nodes
-   std::array<KDTreeNodePtr, 2> children;
+   std::array<KDTreeNode*, 2> children;
 };
 
 class KDTree
@@ -114,7 +114,7 @@ private:
      * @param value value corresponding to the key
      * @return Pointer to the inserted node
      */
-    KDTreeNodePtr insertNode(const KDTreeNodePtr& parent, KDTreeNodePtr node, const std::array<int, 3>& key, double value);
+    KDTreeNode* insertNode(const KDTreeNode* parent, KDTreeNode* node, const std::array<int, 3>& key, double value);
 
     /**
      * @brief Recursive node search, checks if #node corresponds to #key, otherwise search in its children
@@ -122,24 +122,24 @@ private:
      * @param key key to get corresponding node
      * @return Pointer to the found node, nullptr if not found
      */
-    KDTreeNodePtr findNode(const KDTreeNodePtr& node, const std::array<int, 3>& key);
+    KDTreeNode* findNode(KDTreeNode* node, const std::array<int, 3>& key);
 
     /**
      * @brief Recursively label nodes in this cluster
      * @param node node to label including its children
      * @param depth not used
      */
-    void clusterNode(const KDTreeNodePtr& node, int depth);
+    void clusterNode(const KDTreeNode* node, int depth);
 
     // Cell size
     std::array<double, 3> res_;
 
     // The root node of the tree
-    std::shared_ptr<KDTreeNode> root_;
+    KDTreeNode* root_;
 
     // The number of nodes in the tree
     unsigned int node_count_;
-    std::vector<KDTreeNodePtr> nodes_;
+    std::vector<KDTreeNode> nodes_;
 
     // The number of leaf nodes in the tree
     unsigned int leaf_count_;
