@@ -7,18 +7,6 @@
 
 // ----------------------------------------------------------------------------------------------------
 
-KDTreeNode::KDTreeNode() : depth(0), leaf(true), pivot_dim(0), pivot_value(0), key({0,0,0}), value(0), cluster(-1), children({nullptr, nullptr})
-{
-}
-
-// ----------------------------------------------------------------------------------------------------
-
-KDTreeNode::~KDTreeNode()
-{
-}
-
-// ----------------------------------------------------------------------------------------------------
-
 
 KDTree::KDTree(unsigned int initial_size, const std::array<double, 3>& cell_size) : res_(cell_size), root_(nullptr), node_count_(0), nodes_(initial_size), leaf_count_(0)
 {

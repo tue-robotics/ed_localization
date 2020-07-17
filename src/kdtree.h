@@ -7,18 +7,11 @@
 
 class Transform;
 
-class KDTreeNode;
-typedef std::shared_ptr<KDTreeNode> KDTreeNodePtr;
-typedef std::shared_ptr<const KDTreeNode> KDTreeNodeConstPtr;
-
-class KDTreeNode
+struct KDTreeNode
 {
-
-public:
-
-    KDTreeNode();
-
-    ~KDTreeNode();
+    KDTreeNode() : depth(0), leaf(true), pivot_dim(0), pivot_value(0), key({0,0,0}), value(0), cluster(-1), children({nullptr, nullptr})
+    {
+    }
 
     // Depth in the tree
     unsigned int depth;
