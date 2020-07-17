@@ -355,7 +355,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
         sample.weight *= weight_updates[sample_to_unique[j]];
     }
 
-    pf.normalize();
+    pf.normalize(true);
 }
 
 

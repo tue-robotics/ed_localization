@@ -41,7 +41,7 @@ public:
     void initUniform(const geo::Vec2& min, const geo::Vec2& max, double t_step,
                      double a_min, double a_max, double a_step);
 
-    void resample();
+    void resample(std::function<geo::Transform2()> gen_random_pose_function);
 
     unsigned int resampleLimit(unsigned int number_bins);
 
@@ -53,15 +53,24 @@ public:
 
     geo::Transform2 calculateMeanPose() const;
 
-    void normalize();
+    void normalize(bool update_filter=false);
 
 private:
 
-    int i_current_;
     unsigned int min_samples_, max_samples_;
     double kld_err_, kld_z_;
+    double alpha_slow_, alpha_fast_;
+
+    /**
+     * @brief Current running averages of likelihood of samples
+     */
+    double w_slow_, w_fast_;
+
+    int i_current_;
     std::vector<Sample> samples_[2];
+
     std::unique_ptr<KDTree> kd_tree_;
+
     std::vector<unsigned int> limit_cache_;
 
     void setUniformWeights();

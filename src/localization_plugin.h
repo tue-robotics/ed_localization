@@ -26,6 +26,7 @@
 #include "odom_model.h"
 #include "laser_model.h"
 
+#include <functional>
 #include <memory>
 
 namespace tf2 {
@@ -103,6 +104,14 @@ private:
 
     bool laser_offset_initialized_;
 
+    // random pose generation
+
+    geo::Vec2 min_map_, max_map_;
+    unsigned long last_map_size_revision_;
+
+    geo::Transform2 generateRandomPose(std::function<void()> update_map_size);
+
+    void updateMapSize(const ed::WorldModel& world);
 
     // Scan buffer
     std::queue<sensor_msgs::LaserScanConstPtr> scan_buffer_;

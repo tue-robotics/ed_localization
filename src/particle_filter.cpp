@@ -7,7 +7,8 @@
 
 // ----------------------------------------------------------------------------------------------------
 
-ParticleFilter::ParticleFilter() : i_current_(0), min_samples_(0), max_samples_(0), kld_err_(0), kld_z_(0), kd_tree_(nullptr)
+ParticleFilter::ParticleFilter() : min_samples_(0), max_samples_(0), kld_err_(0), kld_z_(0), alpha_slow_(0),
+    alpha_fast_(0), w_slow_(0), w_fast_(0), i_current_(0), kd_tree_(nullptr)
 {
 }
 
@@ -23,26 +24,32 @@ void ParticleFilter::configure(tue::Configuration config)
     min_samples_ = min;
     max_samples_ = max;
 
-    samples_[0].reserve(max_samples_);
-    samples_[1].reserve(max_samples_);
-
     kld_err_ = 0.01;
     kld_z_ = 0.99;
     config.value("kld_err", kld_err_, tue::config::OPTIONAL);
     config.value("kld_z", kld_z_, tue::config::OPTIONAL);
 
-    limit_cache_.clear();
-    limit_cache_.resize(max_samples_, 0);
+    alpha_slow_ = 0;
+    alpha_fast_ = 0;
+    config.value("recovery_alpha_slow", alpha_slow_, tue::config::OPTIONAL);
+    config.value("recovery_alpha_fast", alpha_fast_, tue::config::OPTIONAL);
 
     std::array<double, 3> cell_size = {0.5, 0.5, 10*M_PI/180};
     config.value("cell_size_x", cell_size[0], tue::config::OPTIONAL);
     config.value("cell_size_y", cell_size[1], tue::config::OPTIONAL);
     config.value("cell_size_theta", cell_size[2], tue::config::OPTIONAL);
 
+    samples_[0].reserve(max_samples_);
+    samples_[1].reserve(max_samples_);
+
+    limit_cache_.clear();
+    limit_cache_.resize(max_samples_, 0);
+
     kd_tree_.reset(new KDTree(max_samples_, cell_size));
 
     ROS_INFO_STREAM("[ED Localization] min_samples: " << min_samples_ << ", max_samples: " << max_samples_);
     ROS_INFO_STREAM("[ED Localization] kld_err: " << kld_err_ << ", kld_z: " << kld_z_);
+    ROS_INFO_STREAM("[ED Localization] recovery_alpha_slow: " << alpha_slow_ << ", recovery_alpha_fast: " << alpha_fast_);
     ROS_INFO_STREAM("[ED Localization] cell_size_x: " << cell_size[0] << ", cell_size_y: " << cell_size[1] << ", cell_size_theta: " << cell_size[2]);
 }
 
@@ -77,7 +84,7 @@ bool compareSamples(const Sample& a, const Sample& b)
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::resample()
+void ParticleFilter::resample(std::function<geo::Transform2()> gen_random_pose_function)
 {
     std::vector<Sample>& old_samples = samples_[i_current_];
     std::vector<Sample>& new_samples = samples_[1 - i_current_];
@@ -93,6 +100,10 @@ void ParticleFilter::resample()
     for (uint i=0; i<old_samples.size(); ++i)
         c[i+1] = c[i]+ old_samples[i].weight;
 
+    double w_diff = 1 - w_fast_ / w_slow_;
+    if(w_diff < 0)
+        w_diff = 0;
+
     // Create the kd tree for adaptive sampling;
     kd_tree_->clear();
 
@@ -104,19 +115,23 @@ void ParticleFilter::resample()
         new_samples.push_back(Sample());
         Sample& new_sample = new_samples.back();
 
-        // Naive discrete event sampler
         double r = drand48();
-        uint i=0;
-        for(; i<old_samples.size(); ++i)
+
+        if(r < w_diff)
+            new_sample.pose.set(gen_random_pose_function());
+        else
         {
-            if((c[i] <= r) && (r < c[i+1]))
-                break;
+            // Naive discrete event sampler
+            uint i=0;
+            for(; i<old_samples.size(); ++i)
+            {
+                if((c[i] <= r) && (r < c[i+1]))
+                    break;
+            }
+
+            // Add sample to list
+            new_sample.pose =  old_samples[i].pose;
         }
-
-        Sample& old_sample = old_samples[i];
-
-        // Add sample to list
-        new_sample.pose = old_sample.pose;
 
         new_sample.weight = 1;
 
@@ -215,7 +230,7 @@ geo::Transform2 ParticleFilter::calculateMeanPose() const
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::normalize()
+void ParticleFilter::normalize(bool update_filter)
 {
     std::vector<Sample>& smpls = samples();
 
@@ -223,8 +238,25 @@ void ParticleFilter::normalize()
     for(std::vector<Sample>::iterator it = smpls.begin(); it != smpls.end(); ++it)
         total_weight += it->weight;
 
+    double w_avg = total_weight / samples().size();
+
     if (total_weight > 0)
     {
+        if (update_filter)
+        {
+            // slow
+            if(w_slow_ == 0)
+                w_slow_ = w_avg;
+            else
+                w_slow_ += alpha_slow_ * (w_avg - w_slow_);
+
+            // Fast
+            if(w_fast_ == 0)
+              w_fast_ = w_avg;
+            else
+              w_fast_ += alpha_fast_ * (w_avg - w_fast_);
+        }
+
         for(std::vector<Sample>::iterator it = smpls.begin(); it != smpls.end(); ++it)
             it->weight /= total_weight;
     }

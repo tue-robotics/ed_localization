@@ -17,6 +17,8 @@
 
 #include <tue/profiling/timer.h>
 
+#include <geolib/Shape.h>
+#include <geolib/Box.h>
 #include <geolib/ros/msg_conversions.h>
 #include <geolib/ros/tf2_conversions.h>
 
@@ -41,7 +43,7 @@ private:
 // ----------------------------------------------------------------------------------------------------
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_offset_initialized_(false),
-    tf_buffer_(), tf_listener_(nullptr), tf_broadcaster_(nullptr)
+    last_map_size_revision_(0), tf_buffer_(), tf_listener_(nullptr), tf_broadcaster_(nullptr)
 {
 }
 
@@ -370,7 +372,9 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // -     (Re)sample
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    particle_filter_.resample();
+    const std::function<void()> update_map_size_func = std::bind(&LocalizationPlugin::updateMapSize, this, std::ref(world));
+    const std::function<geo::Transform2()> gen_random_pose_func = std::bind(&LocalizationPlugin::generateRandomPose, this, update_map_size_func);
+    particle_filter_.resample(gen_random_pose_func);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Publish result
@@ -552,6 +556,54 @@ void LocalizationPlugin::laserCallback(const sensor_msgs::LaserScanConstPtr& msg
 void LocalizationPlugin::initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg)
 {
     initial_pose_msg_ = msg;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+geo::Transform2 LocalizationPlugin::generateRandomPose(std::function<void()> update_map_size)
+{
+    update_map_size();
+    geo::Transform2 pose;
+    pose.t = min_map_;
+    const geo::Vec2 map_size = max_map_ - min_map_;
+    pose.t.x +=  drand48() * map_size.x;
+    pose.t.y +=  drand48() * map_size.y;
+    pose.setRotation(drand48() * 2 * M_PI - M_PI);
+    return pose;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::updateMapSize(const ed::WorldModel& world)
+{
+    if (world.revision() <= last_map_size_revision_)
+        return;
+
+    geo::Vec2 min(1e6, 1e6), max(-1e6, -1e6);
+
+    for (auto it = world.begin(); it != world.end(); ++ it)
+    {
+        const ed::EntityConstPtr& e = *it;
+
+        const geo::ShapeConstPtr& shape = e->shape();
+
+        // Skip robot and entities without pose or shape
+        if (!e->has_pose() || !shape || e->hasFlag("self") || shape->getBoundingBox().getMax().z < 0.05)
+            continue;
+
+        geo::Vector3 min_entity_world = e->pose() * shape->getBoundingBox().getMin();
+        geo::Vector3 max_entity_world = e->pose() * shape->getBoundingBox().getMax();
+
+        min.x = std::min<double>(min.x, min_entity_world.x);
+        min.y = std::min<double>(min.y, min_entity_world.y);
+        max.x = std::max<double>(max.x, max_entity_world.x);
+        max.y = std::max<double>(max.y, max_entity_world.y);
+    }
+
+    min_map_ = min;
+    max_map_ = max;
+    last_map_size_revision_ = world.revision();
+
 }
 
 // ----------------------------------------------------------------------------------------------------
