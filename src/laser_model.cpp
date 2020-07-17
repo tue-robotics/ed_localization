@@ -96,16 +96,16 @@ void LaserModel::configure(tue::Configuration config)
     int resolution = 1000; // mm accuracy
 
     exp_hit_.resize(range_max * resolution + 1);
-    for(int i = 0; i < exp_hit_.size(); ++i)
+    for(unsigned int i = 0; i < exp_hit_.size(); ++i)
     {
-        double z = (double)i / resolution;
+        double z = static_cast<double>(i) / resolution;
         exp_hit_[i] = exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
     }
 
     exp_short_.resize(range_max * resolution + 1);
-    for(int i = 0; i < exp_hit_.size(); ++i)
+    for(unsigned int i = 0; i < exp_hit_.size(); ++i)
     {
-        double obs_range = (double)i / resolution;
+        double obs_range = static_cast<double>(i) / resolution;
         exp_short_[i] = exp(-this->lambda_short * obs_range);
     }
 }
