@@ -59,6 +59,8 @@ private:
 
     std::string robot_name_;
 
+    bool visualize_;
+
     // Configuration
     geo::Transform2 getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config);
     geo::Transform2 tryGetInitialPoseFromParamServer(const ros::NodeHandle& nh);
