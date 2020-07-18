@@ -27,6 +27,30 @@ struct Sample
 
 // ----------------------------------------------------------------------------------------------------
 
+struct Cluster
+{
+    Cluster() : count(0), weight(0), cov(0.f), m({0, 0, 0, 0}), c({ {{0, 0}, {0, 0}} })
+    {
+        mean.set(geo::Transform2::identity());
+    }
+
+    // Number of samples
+    unsigned int count;
+
+    // Total weight of samples in this cluster
+    double weight;
+
+    // Cluster statistics
+    Transform mean;
+    geo::Mat3 cov;
+
+    // Workspace
+    std::array<double, 4> m;
+    std::array<std::array<double, 2>, 2> c;
+};
+
+// ----------------------------------------------------------------------------------------------------
+
 class ParticleFilter
 {
 
@@ -51,6 +75,8 @@ public:
 
     const Sample& bestSample() const;
 
+    const std::vector<Cluster>& clusters() const;
+
     geo::Transform2 calculateMeanPose() const;
 
     void normalize(bool update_filter=false);
@@ -66,12 +92,20 @@ private:
      */
     double w_slow_, w_fast_;
 
-    int i_current_;
+    unsigned int i_current_;
     std::vector<Sample> samples_[2];
 
     std::unique_ptr<KDTree> kd_tree_;
 
-    std::vector<unsigned int> limit_cache_;
+    mutable std::vector <Cluster> cluster_cache_;
+    mutable Transform mean_cache_;
+    mutable geo::Mat3 cov_cache_;
+
+    mutable std::vector<unsigned int> limit_cache_;
+
+    void computeClusterStats() const;
+
+    void switchSamples();
 
     void setUniformWeights();
 

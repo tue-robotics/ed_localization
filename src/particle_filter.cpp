@@ -42,6 +42,8 @@ void ParticleFilter::configure(tue::Configuration config)
     samples_[0].reserve(max_samples_);
     samples_[1].reserve(max_samples_);
 
+    cluster_cache_.reserve(max_samples_);
+
     limit_cache_.clear();
     limit_cache_.resize(max_samples_, 0);
 
@@ -143,7 +145,7 @@ void ParticleFilter::resample(std::function<geo::Transform2()> gen_random_pose_f
             break;
     }
 
-    i_current_ = 1 - i_current_;
+    switchSamples();
 
     normalize();
 }
@@ -202,28 +204,31 @@ const Sample& ParticleFilter::bestSample() const
 
 // ----------------------------------------------------------------------------------------------------
 
-// TODO: deal with particle clusters (taking the average of multiple clusters of particles does not make sense)
+const std::vector<Cluster>& ParticleFilter::clusters() const
+{
+    if (cluster_cache_.empty())
+        computeClusterStats();
+
+    return cluster_cache_;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
 geo::Transform2 ParticleFilter::calculateMeanPose() const
 {
-    const std::vector<Sample>& smpls = samples();
+    const std::vector<Cluster>& clstrs = clusters();
 
-    geo::Transform2 mean;
-    mean.t = geo::Vec2(0, 0);
-    geo::Vec2 rot_v(0, 0);
+    geo::Transform2 mean(0, 0, 0);
 
-    for(std::vector<Sample>::const_iterator it = smpls.begin(); it != smpls.end(); ++it)
+    double max_weight = 0;
+    for(const Cluster& cluster : clstrs)
     {
-        const Sample& s = *it;
-        mean.t += s.weight * s.pose.matrix().t;
-        rot_v.x += s.weight * s.pose.matrix().R.xx;
-        rot_v.y += s.weight * s.pose.matrix().R.yx;
+        if (cluster.weight > max_weight)
+        {
+            mean = cluster.mean.matrix();
+            max_weight = cluster.weight;
+        }
     }
-
-    rot_v.normalize();
-    mean.R.xx = rot_v.x;
-    mean.R.yx = rot_v.y;
-    mean.R.xy = -mean.R.yx;
-    mean.R.yy = mean.R.xx;
 
     return mean;
 }
@@ -264,6 +269,106 @@ void ParticleFilter::normalize(bool update_filter)
     {
         setUniformWeights();
     }
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void ParticleFilter::computeClusterStats() const
+{
+    // Cluster the samples
+    kd_tree_->cluster();
+
+    // Initialize overall filter stats
+    double weight = 0;
+    unsigned int count = 0;
+
+    // Workspace
+    std::array<double, 4> m{ {0, 0, 0, 0} };
+    std::array<std::array<double, 2>, 2> c{ {{0, 0}, {0, 0}} };
+
+    // Compute cluster stats
+    for (const Sample& sample : samples())
+    {
+        // Get the cluster label for this sample
+        int cidx = kd_tree_->getCluster(sample.pose);
+        if (cidx < 0)
+            continue;
+
+        if (static_cast<unsigned int>(cidx + 1) > cluster_cache_.size())
+            cluster_cache_.resize(cidx + 1);
+
+        Cluster& cluster = cluster_cache_[cidx];
+
+        cluster.count += 1;
+        count += 1;
+        cluster.weight += sample.weight;
+        weight += sample.weight;
+
+        // Compute mean
+        cluster.m[0] += sample.weight * sample.pose.translation().x;
+        cluster.m[1] += sample.weight * sample.pose.translation().y;
+        cluster.m[2] += sample.weight * cos(sample.pose.rotation());
+        cluster.m[3] += sample.weight * sin(sample.pose.rotation());
+
+        m[0] += cluster.m[0];
+        m[1] += cluster.m[1];
+        m[2] += cluster.m[2];
+        m[3] += cluster.m[3];
+
+        // Compute covariance in linear components
+        for (unsigned int j=0; j<2; ++j)
+        {
+            for (unsigned int k=0; k<2; ++k)
+            {
+                cluster.c[j][k] += sample.weight * sample.pose.translation().m[j] * sample.pose.translation().m[k];
+                c[j][k] += cluster.c[j][k];
+            }
+        }
+    }
+
+    // Normalize
+    for (Cluster& cluster : cluster_cache_)
+    {
+        geo::Transform2 mean;
+        mean.t.x = cluster.m[0] / cluster.weight;
+        mean.t.y = cluster.m[1] / cluster.weight;
+        mean.setRotation(atan2(cluster.m[3], cluster.m[2]));
+        cluster.mean.set(mean);
+
+        // Covariance in linear components
+        for (unsigned int j=0; j<2; ++j)
+            for (unsigned int k=0; k<2; ++k)
+                cluster.cov.m[j * 3 + k] = cluster.c[j][k] / cluster.weight - cluster.mean.translation().m[j] * cluster.mean.translation().m[k];
+
+        // Covariance in angular components
+        cluster.cov.m[8] = -2 * log(sqrt(cluster.m[2] * cluster.m[2] + cluster.m[3] * cluster.m[3]));
+
+    }
+
+    // Compute overall filter stats
+    geo::Transform2 mean;
+    mean.t.x = m[0] / weight;
+    mean.t.y = m[1] / weight;
+    mean.setRotation(atan2(m[3], m[2]));
+    mean_cache_.set(mean);
+
+    // Covariance in linear components
+    for (unsigned int j=0; j<2; ++j)
+        for (unsigned int k=0; k<2; ++k)
+            cov_cache_.m[j * 3 + k] = c[j][k] / weight - mean_cache_.translation().m[j] * mean_cache_.translation().m[k];
+
+    // Covariance in angular components
+    cov_cache_.m[8] = -2 * log(sqrt(m[2] * m[2] + m[3] * m[3]));
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void ParticleFilter::switchSamples()
+{
+    cluster_cache_.clear();
+    mean_cache_.set(geo::Transform2::identity());
+    cov_cache_ = geo::Mat3::identity();
+    i_current_ = 1 - i_current_;
 }
 
 // ----------------------------------------------------------------------------------------------------
