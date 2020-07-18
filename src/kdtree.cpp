@@ -58,7 +58,7 @@ void KDTree::cluster()
 
     for (uint i=queue_count; i>0; --i)
     {
-        KDTreeNode* node = queue[i];
+        KDTreeNode* node = queue[i-1];
 
         // If this node has already been labelled, skip it
         if (node->cluster >= 0)
