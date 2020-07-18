@@ -65,7 +65,7 @@ private:
 
     std::string robot_name_;
 
-    ros::Duration transform_tolerance_;
+    bool visualize_;
 
     // Configuration
     geo::Transform2 getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config);
