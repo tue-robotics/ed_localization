@@ -17,15 +17,15 @@ public:
 
     void configure(tue::Configuration config);
 
-    void updatePoses(const Transform& movement, double dt, ParticleFilter& pf);
+    void updatePoses(const Transform& movement, ParticleFilter& pf);
 
 private:
 
-    double alpha1;
-    double alpha2;
-    double alpha3;
-    double alpha4;
-    double alpha5;
+    double alpha1_;
+    double alpha2_;
+    double alpha3_;
+    double alpha4_;
+    double alpha5_;
 
 };
 

@@ -355,7 +355,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // -     Update motion
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    odom_model_.updatePoses(movement, 0, particle_filter_);
+    odom_model_.updatePoses(movement, particle_filter_);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update sensor
