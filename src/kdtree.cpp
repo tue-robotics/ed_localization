@@ -31,9 +31,7 @@ void KDTree::clear()
 
 void KDTree::insert(const Transform& pose, double value)
 {
-    std::array<int, 3> key = generateKey(pose);
-
-    root_ = insertNode(nullptr, root_, key, value);
+    root_ = insertNode(nullptr, root_, generateKey(pose), value);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -76,9 +74,7 @@ void KDTree::cluster()
 
 int KDTree::getCluster(const Transform& pose)
 {
-    std::array<int, 3> key = generateKey(pose);
-
-    KDTreeNode* node = findNode(root_, key);
+    KDTreeNode* node = findNode(root_, generateKey(pose));
     if (!node)
         return -1;
     return node->cluster;
@@ -88,9 +84,7 @@ int KDTree::getCluster(const Transform& pose)
 
 double KDTree::getValue(const Transform& pose)
 {
-    std::array<int, 3> key = generateKey(pose);
-
-    KDTreeNode* node = findNode(root_, key);
+    KDTreeNode* node = findNode(root_, generateKey(pose));
     if (!node)
         return 0;
     return node->value;
