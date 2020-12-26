@@ -132,7 +132,7 @@ private:
 
     // The number of nodes in the tree
     unsigned int node_count_;
-    std::vector<KDTreeNode> nodes_;
+    std::vector<KDTreeNode*> nodes_;
 
     // The number of leaf nodes in the tree
     unsigned int leaf_count_;

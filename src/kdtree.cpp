@@ -16,6 +16,8 @@ KDTree::KDTree(unsigned int initial_size, const std::array<double, 3>& cell_size
 
 KDTree::~KDTree()
 {
+    for (auto ptr : nodes_)
+        delete ptr;
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -46,7 +48,7 @@ void KDTree::cluster()
     // Put all the leaves in a queue
     for (uint i=0; i<node_count_; ++i)
     {
-        KDTreeNode* node = &(nodes_[i]);
+        KDTreeNode* node = nodes_[i];
         if (node->leaf)
         {
             node->cluster = -1;
@@ -124,11 +126,15 @@ KDTreeNode* KDTree::insertNode(const KDTreeNode* parent, KDTreeNode* node, const
     if (!node)
     {
         // Resize if end is reached
-        if (node_count_ >= nodes_.capacity())
+        if (node_count_ >= nodes_.size())
             nodes_.resize(node_count_ + 10);
 
-        nodes_[node_count_] = KDTreeNode();
-        node = &(nodes_[node_count_++]);
+
+        if (nodes_[node_count_])
+            nodes_[node_count_] = new(nodes_[node_count_]) KDTreeNode;
+        else
+            nodes_[node_count_] = new KDTreeNode;
+        node = nodes_[node_count_++];
         node->leaf = true;
 
         if (!parent)
@@ -153,7 +159,7 @@ KDTreeNode* KDTree::insertNode(const KDTreeNode* parent, KDTreeNode* node, const
         // The keys are not equal, so split this node
         else
         {
-            // Pivot dimension should be x, y, th, x, y, th, z, etc.
+            // Pivot dimension should be x, y, th, x, y, th, etc.
             node->pivot_dim = node->depth % 3;
 
             node->pivot_value = (key[node->pivot_dim] + node->key[node->pivot_dim]) / 2.;
