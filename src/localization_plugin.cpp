@@ -133,8 +133,8 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
     geo::Vec2 p = initial_pose.t;
     double yaw = initial_pose.rotation();
-    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                 yaw - 0.1, yaw + 0.1, 0.05);
+
+    initParticleFilterUniform(p, yaw);
 
     config.value("robot_name", robot_name_);
 
@@ -257,13 +257,9 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     if (initial_pose_msg_)
     {
         // Set initial pose
-
         geo::Vec2 p(initial_pose_msg_->pose.pose.position.x, initial_pose_msg_->pose.pose.position.y);
-
         double yaw = tf::getYaw(initial_pose_msg_->pose.pose.orientation);
-
-        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                     yaw - 0.1, yaw + 0.1, 0.05);
+        initParticleFilterUniform(p, yaw);
     }
 
     while(!scan_buffer_.empty())
@@ -501,6 +497,15 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     }
 
     return OK;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::initParticleFilterUniform(const geo::Vec2& pose, double yaw)
+{
+    particle_filter_.initUniform(pose - geo::Vec2(0.3, 0.3), pose + geo::Vec2(0.3, 0.3), yaw - 0.15, yaw + 0.15);
+    have_previous_odom_pose_ = false;
+    resample_count_ = 0;
 }
 
 // ----------------------------------------------------------------------------------------------------
