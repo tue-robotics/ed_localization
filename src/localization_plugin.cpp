@@ -44,9 +44,9 @@ LocalizationPlugin::~LocalizationPlugin()
 
         // Store the x, y and yaw on the parameter server
         ros::NodeHandle nh;
-        nh.setParam("initialpose/x", pos_map_odom.x());
-        nh.setParam("initialpose/y", pos_map_odom.y());
-        nh.setParam("initialpose/yaw", yaw_map_odom);
+        nh.setParam("initial_pose/x", pos_map_odom.x());
+        nh.setParam("initial_pose/y", pos_map_odom.y());
+        nh.setParam("initial_pose/yaw", yaw_map_odom);
     }
     catch (tf::TransformException ex)
     {
@@ -113,7 +113,8 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
     // Getting last pose from parameter server
     std::map<std::string, double> ros_param_position;
-    if (nh.getParam("initialpose", ros_param_position))
+    bool valid_pose_read = false;
+    if (nh.getParam("initial_pose", ros_param_position))
     {
         // Make a homogeneous transformation with the variables from the parameter server
         tf::Transform homogtrans_map_odom;
@@ -139,6 +140,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
                 p.x = pos_map_baselink.x();
                 p.y = pos_map_baselink.y();
                 yaw = tf::getYaw(rotation_map_baselink);
+                valid_pose_read = true;
 
                 ROS_DEBUG_STREAM("Initial pose from parameter server: [" << p.x << ", " << p.y << "], yaw:" << yaw);
             }
@@ -148,10 +150,12 @@ void LocalizationPlugin::configure(tue::Configuration config)
             }
         }
         else
+        {
             ROS_ERROR("[ED Localization] no transform between odom and base_link.");
-
+        }
     }
-    else if (config.readGroup("initial_pose", tue::config::OPTIONAL))
+
+    if (!valid_pose_read && config.readGroup("initial_pose", tue::config::OPTIONAL))
     {
         config.value("x", p.x);
         config.value("y", p.y);
