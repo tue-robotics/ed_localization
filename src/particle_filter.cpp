@@ -63,18 +63,33 @@ ParticleFilter::~ParticleFilter()
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::initUniform(const geo::Vec2& min, const geo::Vec2& max, double t_step,
-                                 double a_min, double a_max, double a_step)
+void ParticleFilter::initUniform(const geo::Vec2& min, const geo::Vec2& max, double a_min, double a_max)
 {
+    clearCache();
+
     std::vector<Sample>& smpls = samples();
 
     smpls.clear();
-    for(double x = min.x; x < max.x; x += t_step)
-        for(double y = min.y; y < max.y; y += t_step)
-            for(double a = a_min; a < a_max; a += a_step)
+
+    const double range_x = max.x - min.x;
+    const double range_y = max.y - min.y;
+    const double range_yaw = a_max - a_min;
+
+    const double cbrt_samples = ceil(std::cbrt(max_samples_));
+    const double step_x = range_x / cbrt_samples;
+    const double step_y = range_y / cbrt_samples;
+    const double step_yaw = range_yaw / cbrt_samples;
+
+    for(double x = min.x; x < max.x; x += step_x)
+        for(double y = min.y; y < max.y; y += step_y)
+            for(double a = a_min; a < a_max; a += step_yaw)
                 smpls.push_back(Sample(geo::Transform2(x, y, a)));
 
     setUniformWeights();
+
+    kd_tree_->clear();
+    for (const Sample& sample : samples())
+        kd_tree_->insert(sample.pose, sample.weight);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -363,11 +378,18 @@ void ParticleFilter::computeClusterStats() const
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::switchSamples()
+void ParticleFilter::clearCache() const
 {
     cluster_cache_.clear();
     mean_cache_.set(geo::Transform2::identity());
     cov_cache_ = geo::Mat3::identity();
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void ParticleFilter::switchSamples()
+{
+    clearCache();
     i_current_ = 1 - i_current_;
 }
 

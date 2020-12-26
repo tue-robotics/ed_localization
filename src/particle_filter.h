@@ -62,8 +62,7 @@ public:
 
     void configure(tue::Configuration config);
 
-    void initUniform(const geo::Vec2& min, const geo::Vec2& max, double t_step,
-                     double a_min, double a_max, double a_step);
+    void initUniform(const geo::Vec2& min, const geo::Vec2& max, double a_min, double a_max);
 
     void resample(std::function<geo::Transform2()> gen_random_pose_function);
 
@@ -104,6 +103,8 @@ private:
     mutable std::vector<unsigned int> limit_cache_;
 
     void computeClusterStats() const;
+
+    void clearCache() const;
 
     void switchSamples();
 

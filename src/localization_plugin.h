@@ -76,6 +76,8 @@ private:
 
     ParticleFilter particle_filter_;
 
+    void initParticleFilterUniform(const geo::Vec2& pose, double yaw);
+
 
     // MODELS
 
