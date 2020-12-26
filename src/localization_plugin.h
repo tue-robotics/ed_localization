@@ -67,6 +67,12 @@ private:
 
     bool visualize_;
 
+    int resample_interval_;
+    int resample_count_;
+
+    double update_min_d_;
+    double update_min_a_;
+
     // Configuration
     geo::Transform2 getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config);
     geo::Transform2 tryGetInitialPoseFromParamServer(const ros::NodeHandle& nh);
@@ -93,8 +99,13 @@ private:
 
     void laserCallback(const sensor_msgs::LaserScanConstPtr& msg);
 
-    bool have_previous_pose_;
-    geo::Pose3D previous_pose_;
+    bool have_previous_odom_pose_;
+    geo::Pose3D previous_odom_pose_;
+
+    bool latest_map_odom_valid_;
+    geo::Pose3D latest_map_odom_;
+
+    bool update_;
 
     ros::Subscriber sub_initial_pose_;
 
