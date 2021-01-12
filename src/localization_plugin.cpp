@@ -146,7 +146,7 @@ geo::Transform2d LocalizationPlugin::getInitialPose(const ros::NodeHandle& nh, t
 
     try
     {
-        return getInitialPoseFromConfig(config);
+        return tryGetInitialPoseFromConfig(config);
     }
     catch(ConfigurationException)
     {
@@ -211,7 +211,7 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
 
 // ----------------------------------------------------------------------------------------------------
 
-geo::Transform2 getInitialPoseFromConfig(tue::Configuration& config)
+geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromConfig(tue::Configuration& config)
 {
     double x, y, yaw;
     if (config.readGroup("initial_pose", tue::config::OPTIONAL))
@@ -227,7 +227,7 @@ geo::Transform2 getInitialPoseFromConfig(tue::Configuration& config)
         ROS_WARN_STREAM(message);
         throw ConfigurationException(message);
     }
-    
+
     geo::Transform2d result(x, y, yaw);
     return result;
 }
