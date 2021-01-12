@@ -1,3 +1,4 @@
+#include <exception>
 #include "localization_plugin.h"
 
 #include <ros/node_handle.h>
@@ -20,6 +21,19 @@
 #include <geometry_msgs/PoseArray.h>
 
 #include <ed/update_request.h>
+
+class ConfigurationException: public std::exception
+{
+public:
+    ConfigurationException(const std::string& msg){message_ = msg;}
+
+    virtual const char* what() const throw()
+    {
+        return message_.c_str();
+    }
+private:
+    std::string message_;
+};
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -100,14 +114,13 @@ void LocalizationPlugin::configure(tue::Configuration config)
     if (config.value("initial_pose_topic", initial_pose_topic, tue::config::OPTIONAL))
     {
         // Subscribe to initial pose topic
-
         ros::SubscribeOptions sub_opts =
                 ros::SubscribeOptions::create<geometry_msgs::PoseWithCovarianceStamped>(
                     initial_pose_topic, 1, boost::bind(&LocalizationPlugin::initialPoseCallback, this, _1), ros::VoidPtr(), &cb_queue_);
         sub_initial_pose_ = nh.subscribe(sub_opts);
     }
 
-    geo::Transform2d initial_pose = configureInitialPose(nh, config);
+    geo::Transform2d initial_pose = getInitialPose(nh, config);
 
     geo::Vec2 p = initial_pose.t;
     double yaw = initial_pose.rotation();
@@ -121,7 +134,24 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
 // ----------------------------------------------------------------------------------------------------
 
-geo::Transform2d LocalizationPlugin::configureInitialPose(const ros::NodeHandle& nh, tue::Configuration& config)
+geo::Transform2d LocalizationPlugin::getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config)
+{
+    geo::Transform2d result;
+    try 
+    {
+        result = tryGetInitialPoseFromParamServer(nh);
+    }
+    catch (ConfigurationException ex)
+    {
+        result = getInitialPoseFromConfig(config);
+    }
+
+    return result;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::NodeHandle& nh)
 {
     // Initial pose
     geo::Vec2 p(0.0, 0.0);
@@ -129,57 +159,65 @@ geo::Transform2d LocalizationPlugin::configureInitialPose(const ros::NodeHandle&
 
     // Getting last pose from parameter server
     std::map<std::string, double> ros_param_position;
-    bool valid_pose_read = false;
-    if (nh.getParam("initial_pose", ros_param_position))
+    if (!nh.getParam("initial_pose", ros_param_position))
     {
-        // Make a homogeneous transformation with the variables from the parameter server
-        tf::Transform homogtrans_map_odom;
-        homogtrans_map_odom.setOrigin(tf::Vector3(ros_param_position["x"], ros_param_position["y"], 0.0));
-        tf::Quaternion q_map_odom;
-        q_map_odom.setRPY(0, 0, ros_param_position["yaw"]);
-        homogtrans_map_odom.setRotation(q_map_odom);
-
-        // Get homogeneous transformation between odom and base link frame
-        tf::StampedTransform tf_odom_base_link;
-
-        // Set to zero, in case of error when looking up, because can't break an if loop in case of error, so we need to proceed with empty transform.
-        if (tf_listener_->waitForTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
-        {
-            try
-            {
-                tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
-                // Calculate base link position in map frame
-                tf::Transform tf_map_base_link = homogtrans_map_odom * tf_odom_base_link;
-                tf::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
-                tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a quaternion
-
-                p.x = pos_map_baselink.x();
-                p.y = pos_map_baselink.y();
-                yaw = tf::getYaw(rotation_map_baselink);
-                valid_pose_read = true;
-
-                ROS_DEBUG_STREAM("Initial pose from parameter server: [" << p.x << ", " << p.y << "], yaw:" << yaw);
-            }
-            catch (tf::TransformException ex)
-            {
-                ROS_ERROR("[ED Localization] %s",ex.what());
-            }
-        }
-        else
-        {
-            ROS_ERROR("[ED Localization] no transform between odom and base_link.");
-        }
+        std::string msg = "[ED Localization] Could not read initial pose from the parameter server";
+        ROS_WARN(msg.c_str());
+        throw ConfigurationException(msg);
     }
 
-    if (!valid_pose_read && config.readGroup("initial_pose", tue::config::OPTIONAL))
+    // Make a homogeneous transformation with the variables from the parameter server
+    tf::Transform homogtrans_map_odom;
+    homogtrans_map_odom.setOrigin(tf::Vector3(ros_param_position["x"], ros_param_position["y"], 0.0));
+    tf::Quaternion q_map_odom;
+    q_map_odom.setRPY(0, 0, ros_param_position["yaw"]);
+    homogtrans_map_odom.setRotation(q_map_odom);
+
+    if (!tf_listener_->waitForTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
     {
-        config.value("x", p.x);
-        config.value("y", p.y);
+        std::string msg = "[ED Localization] no transform between odom and base_link";
+        ROS_ERROR(msg.c_str());
+        throw ConfigurationException(msg);
+    }
+
+    try
+    {
+        tf::StampedTransform tf_odom_base_link;
+        tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
+        // Calculate base link position in map frame
+        tf::Transform tf_map_base_link = homogtrans_map_odom * tf_odom_base_link;
+        tf::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
+        tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a quaternion
+
+        p.x = pos_map_baselink.x();
+        p.y = pos_map_baselink.y();
+        yaw = tf::getYaw(rotation_map_baselink);
+
+        ROS_DEBUG_STREAM("Initial pose from parameter server: [" << p.x << ", " << p.y << "], yaw:" << yaw);
+        geo::Transform2d result(p.x, p.y, yaw);
+        return result;
+    }
+    catch (tf::TransformException ex)
+    {
+        std::string msg = "[ED Localization] %s" + std::string(ex.what());
+        ROS_ERROR(msg.c_str());
+        throw ConfigurationException(msg);
+    }
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+geo::Transform2 getInitialPoseFromConfig(tue::Configuration& config)
+{
+    double x, y, yaw;
+    if (config.readGroup("initial_pose", tue::config::OPTIONAL))
+    {
+        config.value("x", x);
+        config.value("y", y);
         config.value("rz", yaw);
         config.endGroup();
     }
-
-    geo::Transform2d result(p.x, p.y, yaw);
+    geo::Transform2d result(x, y, yaw);
     return result;
 }
 
