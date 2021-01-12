@@ -107,9 +107,25 @@ void LocalizationPlugin::configure(tue::Configuration config)
         sub_initial_pose_ = nh.subscribe(sub_opts);
     }
 
+    geo::Transform2d initial_pose = configureInitialPose(nh, config);
+
+    geo::Vec2 p = initial_pose.t;
+    double yaw = initial_pose.rotation();
+    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
+                                 yaw - 0.1, yaw + 0.1, 0.05);
+
+    config.value("robot_name", robot_name_);
+
+    pub_particles_ = nh.advertise<geometry_msgs::PoseArray>("ed/localization/particles", 10);
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+geo::Transform2d LocalizationPlugin::configureInitialPose(const ros::NodeHandle& nh, tue::Configuration& config)
+{
     // Initial pose
-    geo::Vec2 p; p.x = 0; p.y = 0;
-    double yaw = 0;
+    geo::Vec2 p(0.0, 0.0);
+    double yaw = 0.0;
 
     // Getting last pose from parameter server
     std::map<std::string, double> ros_param_position;
@@ -163,12 +179,8 @@ void LocalizationPlugin::configure(tue::Configuration config)
         config.endGroup();
     }
 
-    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                 yaw - 0.1, yaw + 0.1, 0.05);
-
-    config.value("robot_name", robot_name_);
-
-    pub_particles_ = nh.advertise<geometry_msgs::PoseArray>("ed/localization/particles", 10);
+    geo::Transform2d result(p.x, p.y, yaw);
+    return result;
 }
 
 // ----------------------------------------------------------------------------------------------------

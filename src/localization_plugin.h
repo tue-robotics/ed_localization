@@ -58,6 +58,8 @@ private:
 
     std::string robot_name_;
 
+    // Configuration
+    geo::Transform2 configureInitialPose(const ros::NodeHandle& nh, tue::Configuration& config);
 
     // PARTICLE FILTER
 
