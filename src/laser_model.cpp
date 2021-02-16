@@ -124,7 +124,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     // calculate the probabilities of those samples, and share them with the similar samples.
 
     // unique samples
-    std::vector<Transform> unique_samples;
+    std::vector<geo::Transform2> unique_samples;
 
     // mapping of samples from the particle filter to the unique sample list
     std::vector<unsigned int> sample_to_unique(pf.samples().size());
@@ -134,12 +134,12 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     for(unsigned int i = 0; i < pf.samples().size(); ++i)
     {
         const Sample& s1 = pf.samples()[i];
-        const Transform& t1 = s1.pose;
+        const geo::Transform2& t1 = s1.pose;
 
         bool found = false;
         for(unsigned int j = 0; j < unique_samples.size(); ++j)
         {
-            const Transform& t2 = unique_samples[j];
+            const geo::Transform2& t2 = unique_samples[j];
 
             // Calculate difference in rotation
             double rot_diff = std::abs(t1.rotation() - t2.rotation());
@@ -147,7 +147,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
                 rot_diff = 2 * M_PI - rot_diff;
 
             // Check if translation and rotational difference are within boundaries
-            if ((t1.matrix().t - t2.matrix().t).length2() < min_particle_distance_sq && rot_diff < min_particle_rotation_distance_)
+            if ((t1.t - t2.t).length2() < min_particle_distance_sq && rot_diff < min_particle_rotation_distance_)
             {
                 found = true;
                 sample_to_unique[i] = j;
@@ -214,7 +214,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     {
         Sample& sample = *it;
 
-        geo::Transform2 laser_pose = sample.pose.matrix() * laser_offset_;
+        geo::Transform2 laser_pose = sample.pose * laser_offset_;
 
         sample_min.x = std::min(sample_min.x, laser_pose.t.x);
         sample_min.y = std::min(sample_min.y, laser_pose.t.y);
@@ -290,7 +290,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     std::vector<double> weight_updates(unique_samples.size());
     for(unsigned int j = 0; j < unique_samples.size(); ++j)
     {
-        geo::Transform2 laser_pose = unique_samples[j].matrix() * laser_offset_;
+        geo::Transform2 laser_pose = unique_samples[j] * laser_offset_;
         geo::Transform2 pose_inv = laser_pose.inverse();
 
         // Calculate sensor model for this pose

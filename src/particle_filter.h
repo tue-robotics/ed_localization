@@ -2,7 +2,6 @@
 #define ED_LOCALIZATION_PARTICLE_FILTER_H_
 
 #include "kdtree.h"
-#include "transform.h"
 
 #include <geolib/datatypes.h>
 
@@ -16,22 +15,20 @@ struct Sample
 {
     Sample() {}
 
-    Sample(const geo::Transform2& t)
+    Sample(const geo::Transform2& t) : pose(t)
     {
-        pose.set(t);
     }
 
     double weight;
-    Transform pose;
+    geo::Transform2 pose;
 };
 
 // ----------------------------------------------------------------------------------------------------
 
 struct Cluster
 {
-    Cluster() : count(0), weight(0), cov(0.f), m({0, 0, 0, 0}), c({ {{0, 0}, {0, 0}} })
+    Cluster() : count(0), weight(0), mean(geo::Transform2::identity()), cov(0.f), m({0, 0, 0, 0}), c({ {{0, 0}, {0, 0}} })
     {
-        mean.set(geo::Transform2::identity());
     }
 
     // Number of samples
@@ -41,7 +38,7 @@ struct Cluster
     double weight;
 
     // Cluster statistics
-    Transform mean;
+    geo::Transform2 mean;
     geo::Mat3 cov;
 
     // Workspace
@@ -97,7 +94,7 @@ private:
     std::unique_ptr<KDTree> kd_tree_;
 
     mutable std::vector <Cluster> cluster_cache_;
-    mutable Transform mean_cache_;
+    mutable geo::Transform2 mean_cache_;
     mutable geo::Mat3 cov_cache_;
 
     mutable std::vector<unsigned int> limit_cache_;

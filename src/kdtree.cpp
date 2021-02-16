@@ -1,5 +1,4 @@
 #include "kdtree.h"
-#include "transform.h"
 
 #include <cmath>
 
@@ -31,7 +30,7 @@ void KDTree::clear()
 
 // ----------------------------------------------------------------------------------------------------
 
-void KDTree::insert(const Transform& pose, double value)
+void KDTree::insert(const geo::Transform2& pose, double value)
 {
     root_ = insertNode(nullptr, root_, generateKey(pose), value);
 }
@@ -74,7 +73,7 @@ void KDTree::cluster()
 
 // ----------------------------------------------------------------------------------------------------
 
-int KDTree::getCluster(const Transform& pose)
+int KDTree::getCluster(const geo::Transform2& pose)
 {
     KDTreeNode* node = findNode(root_, generateKey(pose));
     if (!node)
@@ -84,7 +83,7 @@ int KDTree::getCluster(const Transform& pose)
 
 // ----------------------------------------------------------------------------------------------------
 
-double KDTree::getValue(const Transform& pose)
+double KDTree::getValue(const geo::Transform2& pose)
 {
     KDTreeNode* node = findNode(root_, generateKey(pose));
     if (!node)
@@ -94,11 +93,11 @@ double KDTree::getValue(const Transform& pose)
 
 // ----------------------------------------------------------------------------------------------------
 
-std::array<int, 3> KDTree::generateKey(const Transform &pose)
+std::array<int, 3> KDTree::generateKey(const geo::Transform2 &pose)
 {
     std::array<int, 3> key;
-    key[0] = std::floor(pose.translation().x / res_[0]);
-    key[1] = std::floor(pose.translation().y / res_[1]);
+    key[0] = std::floor(pose.t.x / res_[0]);
+    key[1] = std::floor(pose.t.y / res_[1]);
     key[2] = std::floor(pose.rotation() / res_[2]);
 
     return key;
