@@ -29,7 +29,6 @@ add_library(ed_localization_plugin
   src/odom_model.h
   src/particle_filter.cpp
   src/particle_filter.h
-  src/transform.h
 )
 target_link_libraries(ed_localization_plugin ${catkin_LIBRARIES})
 add_dependencies(ed_localization_plugin ${catkin_EXPORTED_TARGETS})

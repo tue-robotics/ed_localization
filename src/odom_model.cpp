@@ -47,9 +47,9 @@ void OdomModel::configure(tue::Configuration config)
 
 // ----------------------------------------------------------------------------------------------------
 
-void OdomModel::updatePoses(const Transform& movement, ParticleFilter& pf)
+void OdomModel::updatePoses(const geo::Transform2& movement, ParticleFilter& pf)
 {
-    double delta_trans_sq = movement.translation().length2();
+    double delta_trans_sq = movement.t.length2();
 
     double delta_rot = movement.rotation();
     double delta_rot_sq = delta_rot * delta_rot;
@@ -72,6 +72,6 @@ void OdomModel::updatePoses(const Transform& movement, ParticleFilter& pf)
         noise.t = geo::Vec2(delta_trans_hat, delta_strafe_hat);
         noise.setRotation(delta_rot_hat);
 
-        sample.pose.set(sample.pose.matrix() * movement.matrix() * noise);
+        sample.pose = sample.pose * movement * noise;
     }
 }

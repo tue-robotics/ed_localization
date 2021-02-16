@@ -329,7 +329,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     geo::Pose3D odom_to_base_link;
-    Transform movement;
+    geo::Transform2 movement;
 
     tf2::Stamped<tf2::Transform> odom_to_base_link_tf;
     TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, scan->header.stamp, odom_to_base_link_tf);
@@ -341,11 +341,9 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     if (have_previous_odom_pose_)
     {
         // Get displacement and project to 2D
-        geo::Transform2 delta_2d = (previous_odom_pose_.inverse() * odom_to_base_link).projectTo2d();
+        movement = (previous_odom_pose_.inverse() * odom_to_base_link).projectTo2d();
 
-        movement.set(delta_2d);
-
-        update_ = std::abs(movement.translation().x) >= update_min_d_ || std::abs(movement.translation().y) >= update_min_d_ || std::abs(movement.rotation()) >= update_min_a_;
+        update_ = std::abs(movement.t.x) >= update_min_d_ || std::abs(movement.t.y) >= update_min_d_ || std::abs(movement.rotation()) >= update_min_a_;
     }
 
     bool force_publication = false;
@@ -409,7 +407,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         particles_msg.poses.resize(samples.size());
         for(unsigned int i = 0; i < samples.size(); ++i)
         {
-            const geo::Transform2& p = samples[i].pose.matrix();
+            const geo::Transform2& p = samples[i].pose;
 
             geo::Pose3D pose_3d = p.projectTo3d();
 
@@ -512,7 +510,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         const std::vector<Sample>& samples = particle_filter_.samples();
         for(std::vector<Sample>::const_iterator it = samples.begin(); it != samples.end(); ++it)
         {
-            const geo::Transform2& pose = it->pose.matrix();
+            const geo::Transform2& pose = it->pose;
 
             // Visualize sensor
             int lmx = -(pose.t.y - best_pose.t.y) / grid_resolution + grid_size / 2;

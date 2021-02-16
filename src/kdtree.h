@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-class Transform;
+#include <geolib/math_types.h>
 
 struct KDTreeNode
 {
@@ -55,7 +55,7 @@ public:
      * @param pose pose to add
      * @param value value to add to the new node
      */
-    void insert(const Transform& pose, double value);
+    void insert(const geo::Transform2& pose, double value);
 
     /**
      * @brief Label the current nodes by cluster
@@ -67,14 +67,14 @@ public:
      * @param pose Pose to find the cluster for
      * @return cluster number, -1 if pose is not in the tree
      */
-    int getCluster(const Transform& pose);
+    int getCluster(const geo::Transform2& pose);
 
     /**
      * @brief Get the value corresponding to a pose
      * @param pose Pose to find the value for
      * @return cluster number, 0 if pose is not in the tree
      */
-    double getValue(const Transform& pose);
+    double getValue(const geo::Transform2& pose);
 
     /**
      * @brief Get the current number of leaves
@@ -89,7 +89,7 @@ private:
      * @param pose pose to convert to a key
      * @return generated key
      */
-    std::array<int, 3> generateKey(const Transform& pose);
+    std::array<int, 3> generateKey(const geo::Transform2& pose);
 
     /**
      * @brief Compare keys to see if they are equal
