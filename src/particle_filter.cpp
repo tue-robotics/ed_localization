@@ -7,8 +7,17 @@
 
 // ----------------------------------------------------------------------------------------------------
 
-ParticleFilter::ParticleFilter() : min_samples_(0), max_samples_(0), kld_err_(0), kld_z_(0), alpha_slow_(0),
-    alpha_fast_(0), w_slow_(0), w_fast_(0), i_current_(0), kd_tree_(nullptr)
+ParticleFilter::ParticleFilter() :
+    min_samples_(0),
+    max_samples_(0),
+    kld_err_(0),
+    kld_z_(0),
+    alpha_slow_(0),
+    alpha_fast_(0),
+    w_slow_(0),
+    w_fast_(0),
+    i_current_(0),
+    kd_tree_(nullptr)
 {
 }
 
