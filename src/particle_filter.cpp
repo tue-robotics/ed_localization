@@ -190,7 +190,7 @@ unsigned int ParticleFilter::resampleLimit(unsigned int k)
     // double a = 1;
     double b = 2 / (9 * (static_cast<double>(k - 1)));
     double c = sqrt(2 / (9 * (static_cast<double>(k - 1)))) * kld_z_;
-    double x = 1 - b + c;
+    double x = 1 - b + c; // x = a - b + c
 
     unsigned int n = std::ceil((k - 1) / (2 * kld_err_) * x * x * x);
 
