@@ -65,6 +65,7 @@ private:
 
     std::string robot_name_;
 
+    // Config
     bool visualize_;
 
     int resample_interval_;
@@ -73,71 +74,66 @@ private:
     double update_min_d_;
     double update_min_a_;
 
-    // Configuration
-    geo::Transform2 getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config);
-    geo::Transform2 tryGetInitialPoseFromParamServer(const ros::NodeHandle& nh);
-    geo::Transform2 tryGetInitialPoseFromConfig(tue::Configuration& config);
-
     // PARTICLE FILTER
-
     ParticleFilter particle_filter_;
 
-    void initParticleFilterUniform(const geo::Transform2& pose);
-
-
     // MODELS
-
     LaserModel laser_model_;
     OdomModel odom_model_;
 
-
-    // ROS
-
-    ros::CallbackQueue cb_queue_;
-
-    ros::Subscriber sub_laser_;
-
-    void laserCallback(const sensor_msgs::LaserScanConstPtr& msg);
-
+    // Poses
     bool have_previous_odom_pose_;
     geo::Pose3D previous_odom_pose_;
 
     bool latest_map_odom_valid_;
     geo::Pose3D latest_map_odom_;
 
+    // State
     bool update_;
-
-    ros::Subscriber sub_initial_pose_;
-
-    geometry_msgs::PoseWithCovarianceStampedConstPtr initial_pose_msg_;
-
-    void initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg);
-
-    ros::Publisher pub_particles_;
-
     bool laser_offset_initialized_;
 
     // random pose generation
-
     geo::Vec2 min_map_, max_map_;
     unsigned long last_map_size_revision_;
 
-    geo::Transform2 generateRandomPose(std::function<void()> update_map_size);
-
-    void updateMapSize(const ed::WorldModel& world);
+    // Initial pose
+    geometry_msgs::PoseWithCovarianceStampedConstPtr initial_pose_msg_;
 
     // Scan buffer
     std::queue<sensor_msgs::LaserScanConstPtr> scan_buffer_;
 
-
-    // TF2
     std::string map_frame_id_;
     std::string odom_frame_id_;
     std::string base_link_frame_id_;
 
+    // TF2
     tf2_ros::Buffer tf_buffer_;
     std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+
+    // ROS
+    ros::CallbackQueue cb_queue_;
+    ros::Subscriber sub_laser_;
+    ros::Subscriber sub_initial_pose_;
+    ros::Publisher pub_particles_;
+
+    // Configuration
+    geo::Transform2 getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config);
+    geo::Transform2 tryGetInitialPoseFromParamServer(const ros::NodeHandle& nh);
+    geo::Transform2 tryGetInitialPoseFromConfig(tue::Configuration& config);
+
+    // Init
+    void initParticleFilterUniform(const geo::Transform2& pose);
+
+    // Callbacks
+    void laserCallback(const sensor_msgs::LaserScanConstPtr& msg);
+
+    void initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg);
+
+    // random pose generation
+    geo::Transform2 generateRandomPose(std::function<void()> update_map_size);
+
+    void updateMapSize(const ed::WorldModel& world);
 
     TransformStatus update(const sensor_msgs::LaserScanConstPtr& laser_msg_, const ed::WorldModel& world, ed::UpdateRequest& req);
 
