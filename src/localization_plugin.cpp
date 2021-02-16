@@ -39,9 +39,18 @@ private:
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationPlugin::LocalizationPlugin() : visualize_(false), resample_interval_(1), resample_count_(0),
-    update_min_d_(0), update_min_a_(0), have_previous_odom_pose_(false), latest_map_odom_valid_(false),
-    update_(false), laser_offset_initialized_(false), last_map_size_revision_(0), tf_listener_(nullptr),
+LocalizationPlugin::LocalizationPlugin() :
+    visualize_(false),
+    resample_interval_(1),
+    resample_count_(0),
+    update_min_d_(0),
+    update_min_a_(0),
+    have_previous_odom_pose_(false),
+    latest_map_odom_valid_(false),
+    update_(false),
+    laser_offset_initialized_(false),
+    last_map_size_revision_(0),
+    tf_listener_(nullptr),
     tf_broadcaster_(nullptr)
 {
 }
