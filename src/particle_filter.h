@@ -13,9 +13,11 @@
 
 struct Sample
 {
-    Sample() {}
+    Sample() : weight(0), pose(geo::Transform2::identity())
+    {
+    }
 
-    Sample(const geo::Transform2& t) : pose(t)
+    Sample(const geo::Transform2& t) : weight(0), pose(t)
     {
     }
 
