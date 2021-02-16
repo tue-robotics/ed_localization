@@ -380,21 +380,12 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         // -     Update sensor
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-//      tue::Timer timer;
-//      timer.start();
-
         laser_model_.updateWeights(world, *scan, particle_filter_);
 
         previous_odom_pose_ = odom_to_base_link;
         have_previous_odom_pose_ = true;
 
         update_ = false;
-
-//      std::cout << "----------" << std::endl;
-//      std::cout << "Number of lines = " << laser_model_.lines_start().size() << std::endl;
-//      std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
-//      std::cout << "Time per sample = " << timer.getElapsedTimeInMilliSec() / particle_filter_.samples().size() << " ms" << std::endl;
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         // -     (Re)sample
