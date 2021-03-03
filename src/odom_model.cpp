@@ -24,13 +24,8 @@ double generateRandomGaussian(double sigma)
 
 // ----------------------------------------------------------------------------------------------------
 
-OdomModel::OdomModel()
+OdomModel::OdomModel() : alpha1_(0.2), alpha2_(0.2), alpha3_(0.2), alpha4_(0.2), alpha5_(0.2)
 {
-    alpha1 = 0.2;
-    alpha2 = 0.2;
-    alpha3 = 0.2;
-    alpha4 = 0.2;
-    alpha5 = 0.2;
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -43,26 +38,26 @@ OdomModel::~OdomModel()
 
 void OdomModel::configure(tue::Configuration config)
 {
-    config.value("alpha1", alpha1);
-    config.value("alpha2", alpha2);
-    config.value("alpha3", alpha3);
-    config.value("alpha4", alpha4);
-    config.value("alpha5", alpha5);
+    config.value("alpha1", alpha1_);
+    config.value("alpha2", alpha2_);
+    config.value("alpha3", alpha3_);
+    config.value("alpha4", alpha4_);
+    config.value("alpha5", alpha5_);
 }
 
 // ----------------------------------------------------------------------------------------------------
 
-void OdomModel::updatePoses(const Transform& movement, double dt, ParticleFilter& pf)
+void OdomModel::updatePoses(const geo::Transform2& movement, ParticleFilter& pf)
 {
-    double delta_trans_sq = movement.translation().length2();
+    double delta_trans_sq = movement.t.length2();
 
     double delta_rot = movement.rotation();
     double delta_rot_sq = delta_rot * delta_rot;
 
     // Compute noise standard deviations
-    double trans_hat_stddev = sqrt(alpha3 * delta_trans_sq + alpha4 * delta_rot_sq);
-    double rot_hat_stddev = sqrt(alpha1 * delta_rot_sq + alpha2 * delta_trans_sq);
-    double strafe_hat_stddev = sqrt(alpha4 * delta_rot_sq + alpha5 * delta_trans_sq);
+    double trans_hat_stddev = sqrt(alpha3_ * delta_trans_sq + alpha4_ * delta_rot_sq);
+    double rot_hat_stddev = sqrt(alpha1_ * delta_rot_sq + alpha2_ * delta_trans_sq);
+    double strafe_hat_stddev = sqrt(alpha4_ * delta_rot_sq + alpha5_ * delta_trans_sq);
 
     for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
     {
@@ -77,6 +72,6 @@ void OdomModel::updatePoses(const Transform& movement, double dt, ParticleFilter
         noise.t = geo::Vec2(delta_trans_hat, delta_strafe_hat);
         noise.setRotation(delta_rot_hat);
 
-        sample.pose.set(sample.pose.matrix() * movement.matrix() * noise);
+        sample.pose = sample.pose * movement * noise;
     }
 }

@@ -20,6 +20,8 @@ include_directories(
 )
 
 add_library(ed_localization_plugin
+  src/kdtree.cpp
+  src/kdtree.h
   src/laser_model.cpp
   src/laser_model.h
   src/localization_plugin.cpp

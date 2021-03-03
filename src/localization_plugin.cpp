@@ -15,6 +15,8 @@
 
 #include <tue/profiling/timer.h>
 
+#include <geolib/Shape.h>
+#include <geolib/Box.h>
 #include <geolib/ros/msg_conversions.h>
 #include <geolib/ros/tf_conversions.h>
 
@@ -37,8 +39,19 @@ private:
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_offset_initialized_(false),
-    tf_listener_(nullptr), tf_broadcaster_(nullptr)
+LocalizationPlugin::LocalizationPlugin() :
+    visualize_(false),
+    resample_interval_(1),
+    resample_count_(0),
+    update_min_d_(0),
+    update_min_a_(0),
+    have_previous_odom_pose_(false),
+    latest_map_odom_valid_(false),
+    update_(false),
+    laser_offset_initialized_(false),
+    last_map_size_revision_(0),
+    tf_listener_(nullptr),
+    tf_broadcaster_(nullptr)
 {
 }
 
@@ -73,10 +86,18 @@ LocalizationPlugin::~LocalizationPlugin()
 void LocalizationPlugin::configure(tue::Configuration config)
 {
     if (!tf_listener_)
-        tf_listener_ = std::unique_ptr<tf::TransformListener>(new tf::TransformListener);
+        tf_listener_.reset(new tf::TransformListener);
 
     if (!tf_broadcaster_)
-        tf_broadcaster_ = std::unique_ptr<tf::TransformBroadcaster>(new tf::TransformBroadcaster);
+        tf_broadcaster_.reset(new tf::TransformBroadcaster);
+
+    visualize_ = false;
+    config.value("visualize", visualize_, tue::config::OPTIONAL);
+
+    config.value("resample_interval", resample_interval_);
+
+    config.value("update_min_d", update_min_d_);
+    config.value("update_min_a", update_min_a_);
 
     std::string laser_topic;
 
@@ -97,7 +118,11 @@ void LocalizationPlugin::configure(tue::Configuration config)
         config.endGroup();
     }
 
-    config.value("num_particles", num_particles_);
+    if (config.readGroup("particle_filter", tue::config::REQUIRED))
+    {
+        particle_filter_.configure(config);
+        config.endGroup();
+    }
 
     if (config.hasError())
         return;
@@ -122,10 +147,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
     geo::Transform2d initial_pose = getInitialPose(nh, config);
 
-    geo::Vec2 p = initial_pose.t;
-    double yaw = initial_pose.rotation();
-    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                 yaw - 0.1, yaw + 0.1, 0.05);
+    initParticleFilterUniform(initial_pose);
 
     config.value("robot_name", robot_name_);
 
@@ -248,13 +270,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     if (initial_pose_msg_)
     {
         // Set initial pose
-
-        geo::Vec2 p(initial_pose_msg_->pose.pose.position.x, initial_pose_msg_->pose.pose.position.y);
-
-        double yaw = tf::getYaw(initial_pose_msg_->pose.pose.orientation);
-
-        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                     yaw - 0.1, yaw + 0.1, 0.05);
+        geo::Transform2 pose(initial_pose_msg_->pose.pose.position.x, initial_pose_msg_->pose.pose.position.y, tf::getYaw(initial_pose_msg_->pose.pose.orientation));
+        initParticleFilterUniform(pose);
     }
 
     while(!scan_buffer_.empty())
@@ -271,6 +288,10 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
 TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const ed::WorldModel& world, ed::UpdateRequest& req)
 {
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Get transformation from base_link to laser_frame
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
     if (!laser_offset_initialized_)
     {
         tf::StampedTransform p_laser;
@@ -298,11 +319,21 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Check if particle filter is initialized
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if (particle_filter_.samples().empty())
+    {
+        ROS_ERROR("[ED Localization](update) Empty particle filter");
+        return UNKNOWN_ERROR;
+    }
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Calculate delta movement based on odom (fetched from TF)
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     geo::Pose3D odom_to_base_link;
-    Transform movement;
+    geo::Transform2 movement;
 
     tf::StampedTransform odom_to_base_link_tf;
     TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, scan->header.stamp, odom_to_base_link_tf);
@@ -311,121 +342,127 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
 
     geo::convert(odom_to_base_link_tf, odom_to_base_link);
 
-    if (have_previous_pose_)
+    if (have_previous_odom_pose_)
     {
-        geo::Pose3D delta = previous_pose_.inverse() * odom_to_base_link;
+        // Get displacement and project to 2D
+        movement = (previous_odom_pose_.inverse() * odom_to_base_link).projectTo2d();
 
-        // Convert to 2D transformation
-        geo::Transform2 delta_2d(geo::Mat2(delta.R.xx, delta.R.xy,
-                                           delta.R.yx, delta.R.yy),
-                                 geo::Vec2(delta.t.x, delta.t.y));
-
-        movement.set(delta_2d);
-    }
-    else
-    {
-        movement.set(geo::Transform2::identity());
+        update_ = std::abs(movement.t.x) >= update_min_d_ || std::abs(movement.t.y) >= update_min_d_ || std::abs(movement.rotation()) >= update_min_a_;
     }
 
-    previous_pose_ = odom_to_base_link;
-    have_previous_pose_ = true;
+    bool force_publication = false;
+    if (!have_previous_odom_pose_)
+    {
+        previous_odom_pose_ = odom_to_base_link;
+        have_previous_odom_pose_ = true;
+        update_ = true;
+        force_publication = true;
+    }
+    else if (have_previous_odom_pose_ && update_)
+    {
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // -     Update motion
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+        odom_model_.updatePoses(movement, particle_filter_);
+    }
+
+    bool resampled = false;
+    if (update_)
+    {
+        ROS_DEBUG("[ED Localization] Updating laser");
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // -     Update sensor
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        laser_model_.updateWeights(world, *scan, particle_filter_);
+
+        previous_odom_pose_ = odom_to_base_link;
+        have_previous_odom_pose_ = true;
+
+        update_ = false;
+
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // -     (Re)sample
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        if(!(++resample_count_ % resample_interval_))
+        {
+            ROS_DEBUG("[ED Localization] resample particle filter");
+            const std::function<void()> update_map_size_func = std::bind(&LocalizationPlugin::updateMapSize, this, std::ref(world));
+            const std::function<geo::Transform2()> gen_random_pose_func = std::bind(&LocalizationPlugin::generateRandomPose, this, update_map_size_func);
+            particle_filter_.resample(gen_random_pose_func);
+            resampled = true;
+        }
+
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // -     Publish particles
+        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        ROS_DEBUG("[ED Localization] Publishing particles");
+        const std::vector<Sample>& samples = particle_filter_.samples();
+        geometry_msgs::PoseArray particles_msg;
+        particles_msg.poses.resize(samples.size());
+        for(unsigned int i = 0; i < samples.size(); ++i)
+        {
+            const geo::Transform2& p = samples[i].pose;
+
+            geo::Pose3D pose_3d = p.projectTo3d();
+
+            geo::convert(pose_3d, particles_msg.poses[i]);
+        }
+
+        particles_msg.header.frame_id = map_frame_id_;
+        particles_msg.header.stamp = scan->header.stamp;
+
+        pub_particles_.publish(particles_msg);
+    }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Check if particle filter is initialized
+    // -     Update map-odom
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if(resampled || force_publication)
+    {
+        ROS_DEBUG("[ED Localization] Updating map_odom");
+        // Get the best pose (2D)
+        geo::Transform2 mean_pose = particle_filter_.calculateMeanPose();
+        ROS_DEBUG_STREAM("mean_pose: x: " << mean_pose.t.x << ", y: " << mean_pose.t.y << ", yaw: " << mean_pose.rotation());
 
-    if (particle_filter_.samples().empty())
-        return UNKNOWN_ERROR;
+        // Convert best pose to 3D
+        geo::Pose3D map_to_base_link;
+        map_to_base_link = mean_pose.projectTo3d();
 
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Update motion
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    odom_model_.updatePoses(movement, 0, particle_filter_);
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Update sensor
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-//    tue::Timer timer;
-//    timer.start();
-
-    laser_model_.updateWeights(world, *scan, particle_filter_);
-
-//    std::cout << "----------" << std::endl;
-//    std::cout << "Number of lines = " << laser_model_.lines_start().size() << std::endl;
-//    std::cout << "Total time = " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
-//    std::cout << "Time per sample = " << timer.getElapsedTimeInMilliSec() / particle_filter_.samples().size() << " ms" << std::endl;
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     (Re)sample
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    particle_filter_.resample(num_particles_);
+        latest_map_odom_ = map_to_base_link * odom_to_base_link.inverse();
+        latest_map_odom_valid_ = true;
+    }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Publish result
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    // Get the best pose (2D)
-    geo::Transform2 mean_pose = particle_filter_.calculateMeanPose();
-
-    // Convert best pose to 3D
-    geo::Pose3D map_to_base_link;
-    map_to_base_link.t = geo::Vector3(mean_pose.t.x, mean_pose.t.y, 0);
-    map_to_base_link.R = geo::Matrix3(mean_pose.R.xx, mean_pose.R.xy, 0,
-                                      mean_pose.R.yx, mean_pose.R.yy, 0,
-                                      0     , 0     , 1);
-
-    geo::Pose3D map_to_odom = map_to_base_link * odom_to_base_link.inverse();
-
-    // Convert to TF transform
-    tf::StampedTransform map_to_odom_tf;
-    geo::convert(map_to_odom, map_to_odom_tf);
-
-    // Set frame id's and time stamp
-    map_to_odom_tf.frame_id_ = map_frame_id_;
-    map_to_odom_tf.child_frame_id_ = odom_frame_id_;
-    map_to_odom_tf.stamp_ = scan->header.stamp;
-
-    // Publish TF
-    tf_broadcaster_->sendTransform(map_to_odom_tf);
-
-    if (!robot_name_.empty())
-        req.setPose(robot_name_, map_to_base_link);
-
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Publish particles
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-    const std::vector<Sample>& samples = particle_filter_.samples();
-    geometry_msgs::PoseArray particles_msg;
-    particles_msg.poses.resize(samples.size());
-    for(unsigned int i = 0; i < samples.size(); ++i)
+    if (latest_map_odom_valid_)
     {
-        const geo::Transform2& p = samples[i].pose.matrix();
+        ROS_DEBUG_THROTTLE(2, "[ED Localization] Publishing map_odom");
+        // Convert to TF transform
+        tf::StampedTransform latest_map_odom_tf;
+        geo::convert(latest_map_odom_, latest_map_odom_tf);
 
-        geo::Pose3D pose_3d;
-        pose_3d.t = geo::Vector3(p.t.x, p.t.y, 0);
-        pose_3d.R = geo::Matrix3(p.R.xx, p.R.xy, 0,
-                                 p.R.yx, p.R.yy, 0,
-                                 0     , 0     , 1);
+        // Set frame id's and time stamp
+        latest_map_odom_tf.frame_id_ = map_frame_id_;
+        latest_map_odom_tf.child_frame_id_ = odom_frame_id_;
+        latest_map_odom_tf.stamp_ = scan->header.stamp;
 
-        geo::convert(pose_3d, particles_msg.poses[i]);
+        // Publish TF
+        tf_broadcaster_->sendTransform(latest_map_odom_tf);
+
+        // This should be executed allways. map_odom * odom_base_link
+        if (!robot_name_.empty())
+            req.setPose(robot_name_, latest_map_odom_ * previous_odom_pose_);
     }
-
-    particles_msg.header.frame_id = "/map";
-    particles_msg.header.stamp = scan->header.stamp;
-
-    pub_particles_.publish(particles_msg);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Visualization
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    bool visualize = false;
-    if (visualize)
+    if (visualize_)
     {
+        ROS_DEBUG("[ED Localization] Visualize");
         int grid_size = 800;
         double grid_resolution = 0.025;
 
@@ -434,7 +471,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         std::vector<geo::Vector3> sensor_points;
         laser_model_.renderer().rangesToPoints(laser_model_.sensor_ranges(), sensor_points);
 
-        geo::Transform2 best_pose = mean_pose;
+        geo::Transform2 best_pose = (latest_map_odom_ * previous_odom_pose_).projectTo2d();
 
         geo::Transform2 laser_pose = best_pose * laser_model_.laser_offset();
         for(unsigned int i = 0; i < sensor_points.size(); ++i)
@@ -468,7 +505,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         const std::vector<Sample>& samples = particle_filter_.samples();
         for(std::vector<Sample>::const_iterator it = samples.begin(); it != samples.end(); ++it)
         {
-            const geo::Transform2& pose = it->pose.matrix();
+            const geo::Transform2& pose = it->pose;
 
             // Visualize sensor
             int lmx = -(pose.t.y - best_pose.t.y) / grid_resolution + grid_size / 2;
@@ -484,8 +521,23 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         cv::imshow("localization", rgb_image);
         cv::waitKey(1);
     }
+    else
+    {
+        cv::destroyAllWindows();
+    }
 
     return OK;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::initParticleFilterUniform(const geo::Transform2& pose)
+{
+    const geo::Vec2& p = pose.getOrigin();
+    const double yaw = pose.rotation();
+    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), yaw - 0.15, yaw + 0.15);
+    have_previous_odom_pose_ = false;
+    resample_count_ = 0;
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -542,6 +594,54 @@ void LocalizationPlugin::laserCallback(const sensor_msgs::LaserScanConstPtr& msg
 void LocalizationPlugin::initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg)
 {
     initial_pose_msg_ = msg;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+geo::Transform2 LocalizationPlugin::generateRandomPose(std::function<void()> update_map_size)
+{
+    update_map_size();
+    geo::Transform2 pose;
+    pose.t = min_map_;
+    const geo::Vec2 map_size = max_map_ - min_map_;
+    pose.t.x +=  drand48() * map_size.x;
+    pose.t.y +=  drand48() * map_size.y;
+    pose.setRotation(drand48() * 2 * M_PI - M_PI);
+    return pose;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::updateMapSize(const ed::WorldModel& world)
+{
+    if (world.revision() <= last_map_size_revision_)
+        return;
+
+    geo::Vec2 min(1e6, 1e6), max(-1e6, -1e6);
+
+    for (auto it = world.begin(); it != world.end(); ++ it)
+    {
+        const ed::EntityConstPtr& e = *it;
+
+        const geo::ShapeConstPtr& shape = e->shape();
+
+        // Skip robot and entities without pose or shape
+        if (!e->has_pose() || !shape || e->hasFlag("self") || shape->getBoundingBox().getMax().z < 0.05)
+            continue;
+
+        geo::Vector3 min_entity_world = e->pose() * shape->getBoundingBox().getMin();
+        geo::Vector3 max_entity_world = e->pose() * shape->getBoundingBox().getMax();
+
+        min.x = std::min<double>(min.x, min_entity_world.x);
+        min.y = std::min<double>(min.y, min_entity_world.y);
+        max.x = std::max<double>(max.x, max_entity_world.x);
+        max.y = std::max<double>(max.y, max_entity_world.y);
+    }
+
+    min_map_ = min;
+    max_map_ = max;
+    last_map_size_revision_ = world.revision();
+
 }
 
 // ----------------------------------------------------------------------------------------------------
