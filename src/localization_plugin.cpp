@@ -136,7 +136,7 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
 geo::Transform2d LocalizationPlugin::getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config)
 {
-    try 
+    try
     {
         return tryGetInitialPoseFromParamServer(nh);
     }
@@ -196,7 +196,7 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
         result.t.y = pos_map_baselink.y();
         result.setRotation(tf::getYaw(rotation_map_baselink));
 
-        ROS_DEBUG_STREAM("[ED Localization] Initial pose from parameter server: [" << 
+        ROS_DEBUG_STREAM("[ED Localization] Initial pose from parameter server: [" <<
             result.t.x << ", " << result.t.y << "], yaw:" << result.rotation()
         );
         return result;
@@ -414,7 +414,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         geo::convert(pose_3d, particles_msg.poses[i]);
     }
 
-    particles_msg.header.frame_id = "/map";
+    particles_msg.header.frame_id = "map";
     particles_msg.header.stamp = scan->header.stamp;
 
     pub_particles_.publish(particles_msg);
