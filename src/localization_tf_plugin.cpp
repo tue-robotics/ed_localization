@@ -1,25 +1,18 @@
 #include "localization_tf_plugin.h"
 
-#include <ros/node_handle.h>
-#include <ros/subscribe_options.h>
-
 #include <ed/world_model.h>
 #include <ed/entity.h>
-
-#include <opencv2/highgui/highgui.hpp>
-
-#include <tue/profiling/timer.h>
+#include <ed/update_request.h>
 
 #include <geolib/ros/msg_conversions.h>
-#include <geolib/ros/tf_conversions.h>
 
-#include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/TransformStamped.h>
 
-#include <ed/update_request.h>
+#include <tf2_ros/transform_listener.h>
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationTFPlugin::LocalizationTFPlugin() : tf_listener_()
+LocalizationTFPlugin::LocalizationTFPlugin() : tf_buffer_(), tf_listener_(nullptr)
 {
 }
 
@@ -34,32 +27,29 @@ LocalizationTFPlugin::~LocalizationTFPlugin()
 void LocalizationTFPlugin::configure(tue::Configuration config)
 {
     config.value("robot_name", robot_name_);
-
-    delete tf_listener_;
-    tf_listener_ = new tf::TransformListener;
 }
 
 // ----------------------------------------------------------------------------------------------------
 
 void LocalizationTFPlugin::initialize()
 {
+    tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_buffer_);
 }
 
 // ----------------------------------------------------------------------------------------------------
 
-void LocalizationTFPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
+void LocalizationTFPlugin::process(const ed::WorldModel& /*world*/, ed::UpdateRequest& req)
 {
     try
     {
-        tf::StampedTransform t_pose;
-        tf_listener_->lookupTransform("/" + robot_name_ + "/base_link", "map", ros::Time(0), t_pose);
+        geometry_msgs::TransformStamped ts = tf_buffer_.lookupTransform(robot_name_ + "/base_link", "map", ros::Time(0));
 
         geo::Pose3D pose;
-        geo::convert(t_pose, pose);
+        geo::convert(ts.transform, pose);
 
         req.setPose(robot_name_, pose.inverse());
     }
-    catch(tf::TransformException& exc)
+    catch(tf2::TransformException& exc)
     {
         ROS_ERROR_STREAM("ED LocalizationTFPlugin: " << exc.what());
     }

@@ -5,14 +5,13 @@ find_package(catkin REQUIRED COMPONENTS
   ed
   geometry_msgs
   sensor_msgs
-  tf
+  tf2
+  tf2_geometry_msgs
+  tf2_ros
 )
 
 catkin_package(
-  # INCLUDE_DIRS include
-  # LIBRARIES bla
-  # DEPENDS system_lib
-  CATKIN_DEPENDS ed geometry_msgs sensor_msgs tf
+  LIBRARIES ed_localization_plugin ed_localization_tf_plugin
 )
 
 include_directories(

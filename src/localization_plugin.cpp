@@ -10,15 +10,18 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
-#include <tf/transform_listener.h>
-#include <tf/transform_broadcaster.h>
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
 
 #include <tue/profiling/timer.h>
 
 #include <geolib/ros/msg_conversions.h>
-#include <geolib/ros/tf_conversions.h>
+#include <geolib/ros/tf2_conversions.h>
 
 #include <geometry_msgs/PoseArray.h>
+#include <geometry_msgs/TransformStamped.h>
 
 #include <ed/update_request.h>
 
@@ -38,7 +41,7 @@ private:
 // ----------------------------------------------------------------------------------------------------
 
 LocalizationPlugin::LocalizationPlugin() : have_previous_pose_(false), laser_offset_initialized_(false),
-    tf_listener_(nullptr), tf_broadcaster_(nullptr)
+    tf_buffer_(), tf_listener_(nullptr), tf_broadcaster_(nullptr)
 {
 }
 
@@ -50,19 +53,17 @@ LocalizationPlugin::~LocalizationPlugin()
     // Get transform between map and odom frame
     try
     {
-        tf::StampedTransform tf_map_odom;
-        tf_listener_->lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0), tf_map_odom);
-        tf::Vector3 pos_map_odom = tf_map_odom.getOrigin(); // Returns a vector
-        tf::Quaternion rotation_map_odom = tf_map_odom.getRotation(); // Returns a quaternion
-        double yaw_map_odom = tf::getYaw(rotation_map_odom);
+        geometry_msgs::TransformStamped ts = tf_buffer_.lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0));
+        tf2::Quaternion rotation_map_odom;
+        tf2::convert(ts.transform.rotation, rotation_map_odom); // Returns a quaternion
 
         // Store the x, y and yaw on the parameter server
         ros::NodeHandle nh;
-        nh.setParam("initial_pose/x", pos_map_odom.x());
-        nh.setParam("initial_pose/y", pos_map_odom.y());
-        nh.setParam("initial_pose/yaw", yaw_map_odom);
+        nh.setParam("initial_pose/x", ts.transform.translation.x);
+        nh.setParam("initial_pose/y", ts.transform.translation.y);
+        nh.setParam("initial_pose/yaw", rotation_map_odom.getAngle());
     }
-    catch (tf::TransformException ex)
+    catch (tf2::TransformException ex)
     {
         ROS_ERROR("[ED Localization] %s",ex.what());
     }
@@ -72,11 +73,9 @@ LocalizationPlugin::~LocalizationPlugin()
 
 void LocalizationPlugin::configure(tue::Configuration config)
 {
-    if (!tf_listener_)
-        tf_listener_ = std::unique_ptr<tf::TransformListener>(new tf::TransformListener);
+    tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_buffer_);
 
-    if (!tf_broadcaster_)
-        tf_broadcaster_ = std::unique_ptr<tf::TransformBroadcaster>(new tf::TransformBroadcaster);
+    tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>();
 
     std::string laser_topic;
 
@@ -169,13 +168,13 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
     }
 
     // Make a homogeneous transformation with the variables from the parameter server
-    tf::Transform homogtrans_map_odom;
-    homogtrans_map_odom.setOrigin(tf::Vector3(ros_param_position["x"], ros_param_position["y"], 0.0));
-    tf::Quaternion q_map_odom;
+    tf2::Transform homogtrans_map_odom;
+    homogtrans_map_odom.setOrigin(tf2::Vector3(ros_param_position["x"], ros_param_position["y"], 0.0));
+    tf2::Quaternion q_map_odom;
     q_map_odom.setRPY(0, 0, ros_param_position["yaw"]);
     homogtrans_map_odom.setRotation(q_map_odom);
 
-    if (!tf_listener_->waitForTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
+    if (!tf_buffer_.canTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
     {
         std::string msg = "[ED Localization] no transform between odom and base_link";
         ROS_ERROR_STREAM(msg);
@@ -184,24 +183,25 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
 
     try
     {
-        tf::StampedTransform tf_odom_base_link;
-        tf_listener_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), tf_odom_base_link);
+        geometry_msgs::TransformStamped ts = tf_buffer_.lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0));
+        tf2::Stamped<tf2::Transform> tf_odom_base_link;
+        tf2::convert(ts, tf_odom_base_link);
         // Calculate base link position in map frame
-        tf::Transform tf_map_base_link = homogtrans_map_odom * tf_odom_base_link;
-        tf::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
-        tf::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a quaternion
+        tf2::Transform tf_map_base_link = homogtrans_map_odom * tf_odom_base_link;
+        tf2::Vector3 pos_map_baselink = tf_map_base_link.getOrigin(); // Returns a vector
+        tf2::Quaternion rotation_map_baselink = tf_map_base_link.getRotation(); // Returns a quaternion
 
         geo::Transform2d result;
         result.t.x = pos_map_baselink.x();
         result.t.y = pos_map_baselink.y();
-        result.setRotation(tf::getYaw(rotation_map_baselink));
+        result.setRotation(rotation_map_baselink.getAngle());
 
         ROS_DEBUG_STREAM("[ED Localization] Initial pose from parameter server: [" <<
             result.t.x << ", " << result.t.y << "], yaw:" << result.rotation()
         );
         return result;
     }
-    catch (tf::TransformException ex)
+    catch (tf2::TransformException ex)
     {
         std::string msg = "[ED Localization] %s" + std::string(ex.what());
         ROS_ERROR_STREAM(msg);
@@ -248,10 +248,11 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     if (initial_pose_msg_)
     {
         // Set initial pose
-
         geo::Vec2 p(initial_pose_msg_->pose.pose.position.x, initial_pose_msg_->pose.pose.position.y);
+        tf2::Quaternion q;
+        tf2::convert(initial_pose_msg_->pose.pose.orientation, q);
 
-        double yaw = tf::getYaw(initial_pose_msg_->pose.pose.orientation);
+        double yaw = q.getAngle();
 
         particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
                                      yaw - 0.1, yaw + 0.1, 0.05);
@@ -273,7 +274,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
 {
     if (!laser_offset_initialized_)
     {
-        tf::StampedTransform p_laser;
+        tf2::Stamped<tf2::Transform> p_laser;
         TransformStatus ts = transform(base_link_frame_id_, scan->header.frame_id, scan->header.stamp, p_laser);
 
         if (ts != OK)
@@ -304,7 +305,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     geo::Pose3D odom_to_base_link;
     Transform movement;
 
-    tf::StampedTransform odom_to_base_link_tf;
+    tf2::Stamped<tf2::Transform> odom_to_base_link_tf;
     TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, scan->header.stamp, odom_to_base_link_tf);
     if (ts != OK)
         return ts;
@@ -380,13 +381,13 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     geo::Pose3D map_to_odom = map_to_base_link * odom_to_base_link.inverse();
 
     // Convert to TF transform
-    tf::StampedTransform map_to_odom_tf;
-    geo::convert(map_to_odom, map_to_odom_tf);
+    geometry_msgs::TransformStamped map_to_odom_tf;
+    geo::convert(map_to_odom, map_to_odom_tf.transform);
 
     // Set frame id's and time stamp
-    map_to_odom_tf.frame_id_ = map_frame_id_;
-    map_to_odom_tf.child_frame_id_ = odom_frame_id_;
-    map_to_odom_tf.stamp_ = scan->header.stamp;
+    map_to_odom_tf.header.frame_id = map_frame_id_;
+    map_to_odom_tf.child_frame_id = odom_frame_id_;
+    map_to_odom_tf.header.stamp = scan->header.stamp;
 
     // Publish TF
     tf_broadcaster_->sendTransform(map_to_odom_tf);
@@ -414,7 +415,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         geo::convert(pose_3d, particles_msg.poses[i]);
     }
 
-    particles_msg.header.frame_id = "map";
+    particles_msg.header.frame_id = map_frame_id_;
     particles_msg.header.stamp = scan->header.stamp;
 
     pub_particles_.publish(particles_msg);
@@ -491,24 +492,24 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
 // ----------------------------------------------------------------------------------------------------
 
 TransformStatus LocalizationPlugin::transform(const std::string& target_frame, const std::string& source_frame,
-                                              const ros::Time& time, tf::StampedTransform& transform)
+                                              const ros::Time& time, tf2::Stamped<tf2::Transform>& transform)
 {
     try
     {
-        tf_listener_->lookupTransform(target_frame, source_frame, time, transform);
+        geometry_msgs::TransformStamped ts = tf_buffer_.lookupTransform(target_frame, source_frame, time);
+        tf2::convert(ts, transform);
         return OK;
     }
-    catch(tf::ExtrapolationException& ex)
+    catch(tf2::ExtrapolationException& ex)
     {
         try
         {
             // Now we have to check if the error was an interpolation or extrapolation error
             // (i.e., the scan is too old or too new, respectively)
 
-            tf::StampedTransform latest_transform;
-            tf_listener_->lookupTransform(target_frame, source_frame, ros::Time(0), latest_transform);
+            geometry_msgs::TransformStamped latest_transform = tf_buffer_.lookupTransform(target_frame, source_frame, ros::Time(0));
 
-            if (scan_buffer_.front()->header.stamp > latest_transform.stamp_)
+            if (scan_buffer_.front()->header.stamp > latest_transform.header.stamp)
             {
                 // Scan is too new
                 return TOO_RECENT;
@@ -519,12 +520,12 @@ TransformStatus LocalizationPlugin::transform(const std::string& target_frame, c
                 return TOO_OLD;
             }
         }
-        catch(tf::TransformException& exc)
+        catch(tf2::TransformException& exc)
         {
             return UNKNOWN_ERROR;
         }
     }
-    catch(tf::TransformException& ex)
+    catch(tf2::TransformException& ex)
     {
         return UNKNOWN_ERROR;
     }
