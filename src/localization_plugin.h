@@ -16,8 +16,9 @@
 // SCAN BUFFER
 #include <queue>
 
-// TF
-#include <tf/transform_datatypes.h>
+// TF2
+#include <tf2/transform_datatypes.h>
+#include <tf2_ros/buffer.h>
 
 // MODELS
 #include "particle_filter.h"
@@ -26,9 +27,13 @@
 
 #include <memory>
 
-namespace tf {
-class TransformListener;
-class TransformBroadcaster;
+namespace tf2 {
+    class Transform;
+}
+
+namespace tf2_ros {
+    class TransformListener;
+    class TransformBroadcaster;
 }
 
 enum TransformStatus
@@ -102,19 +107,19 @@ private:
     std::queue<sensor_msgs::LaserScanConstPtr> scan_buffer_;
 
 
-    // TF
-
+    // TF2
     std::string map_frame_id_;
     std::string odom_frame_id_;
     std::string base_link_frame_id_;
 
-    std::unique_ptr<tf::TransformListener> tf_listener_;
-    std::unique_ptr<tf::TransformBroadcaster> tf_broadcaster_;
+    tf2_ros::Buffer tf_buffer_;
+    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
+    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
     TransformStatus update(const sensor_msgs::LaserScanConstPtr& laser_msg_, const ed::WorldModel& world, ed::UpdateRequest& req);
 
     TransformStatus transform(const std::string& target_frame, const std::string& source_frame,
-                              const ros::Time& time, tf::StampedTransform& transform);
+                              const ros::Time& time, tf2::Stamped<tf2::Transform>& transform);
 
 };
 
