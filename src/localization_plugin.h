@@ -123,6 +123,8 @@ private:
     geo::Transform2 tryGetInitialPoseFromConfig(tue::Configuration& config);
 
     // Init
+    TransformStatus initLaserOffset(const std::string& frame_id, const ros::Time& stamp);
+
     void initParticleFilterUniform(const geo::Transform2& pose);
 
     // Callbacks
