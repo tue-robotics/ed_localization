@@ -137,6 +137,8 @@ private:
 
     TransformStatus update(const sensor_msgs::LaserScanConstPtr& laser_msg_, const ed::WorldModel& world, ed::UpdateRequest& req);
 
+    bool resample(const ed::WorldModel& world);
+
     TransformStatus transform(const std::string& target_frame, const std::string& source_frame,
                               const ros::Time& time, tf2::Stamped<tf2::Transform>& transform);
 

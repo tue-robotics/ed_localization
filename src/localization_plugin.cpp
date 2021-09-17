@@ -390,14 +390,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         // -     (Re)sample
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        if(!(++resample_count_ % resample_interval_))
-        {
-            ROS_DEBUG("[ED Localization] resample particle filter");
-            const std::function<void()> update_map_size_func = std::bind(&LocalizationPlugin::updateMapSize, this, std::ref(world));
-            const std::function<geo::Transform2()> gen_random_pose_func = std::bind(&LocalizationPlugin::generateRandomPose, this, update_map_size_func);
-            particle_filter_.resample(gen_random_pose_func);
-            resampled = true;
-        }
+        resampled = resample(world);
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         // -     Publish particles
@@ -544,6 +537,20 @@ void LocalizationPlugin::initParticleFilterUniform(const geo::Transform2& pose)
     particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), yaw - 0.15, yaw + 0.15);
     have_previous_odom_pose_ = false;
     resample_count_ = 0;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+bool LocalizationPlugin::resample(const ed::WorldModel& world)
+{
+    if(++resample_count_ % resample_interval_)
+        return false;
+
+    ROS_DEBUG("[ED Localization] resample particle filter");
+    const std::function<void()> update_map_size_func = std::bind(&LocalizationPlugin::updateMapSize, this, std::ref(world));
+    const std::function<geo::Transform2()> gen_random_pose_func = std::bind(&LocalizationPlugin::generateRandomPose, this, update_map_size_func);
+    particle_filter_.resample(gen_random_pose_func);
+    return true;
 }
 
 // ----------------------------------------------------------------------------------------------------
