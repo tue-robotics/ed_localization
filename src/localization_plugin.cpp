@@ -395,23 +395,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         // -     Publish particles
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        ROS_DEBUG("[ED Localization] Publishing particles");
-        const std::vector<Sample>& samples = particle_filter_.samples();
-        geometry_msgs::PoseArray particles_msg;
-        particles_msg.poses.resize(samples.size());
-        for(unsigned int i = 0; i < samples.size(); ++i)
-        {
-            const geo::Transform2& p = samples[i].pose;
-
-            geo::Pose3D pose_3d = p.projectTo3d();
-
-            geo::convert(pose_3d, particles_msg.poses[i]);
-        }
-
-        particles_msg.header.frame_id = map_frame_id_;
-        particles_msg.header.stamp = scan->header.stamp;
-
-        pub_particles_.publish(particles_msg);
+        publishParticles(scan->header.stamp);
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -551,6 +535,29 @@ bool LocalizationPlugin::resample(const ed::WorldModel& world)
     const std::function<geo::Transform2()> gen_random_pose_func = std::bind(&LocalizationPlugin::generateRandomPose, this, update_map_size_func);
     particle_filter_.resample(gen_random_pose_func);
     return true;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::publishParticles(const ros::Time &stamp)
+{
+    ROS_DEBUG("[ED Localization] Publishing particles");
+    const std::vector<Sample>& samples = particle_filter_.samples();
+    geometry_msgs::PoseArray particles_msg;
+    particles_msg.poses.resize(samples.size());
+    for(unsigned int i = 0; i < samples.size(); ++i)
+    {
+        const geo::Transform2& p = samples[i].pose;
+
+        geo::Pose3D pose_3d = p.projectTo3d();
+
+        geo::convert(pose_3d, particles_msg.poses[i]);
+    }
+
+    particles_msg.header.frame_id = map_frame_id_;
+    particles_msg.header.stamp = stamp;
+
+    pub_particles_.publish(particles_msg);
 }
 
 // ----------------------------------------------------------------------------------------------------
