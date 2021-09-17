@@ -446,13 +446,13 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     {
         ROS_DEBUG_THROTTLE(2, "[ED Localization] Publishing map_odom");
         // Convert to TF transform
-        tf::StampedTransform latest_map_odom_tf;
-        geo::convert(latest_map_odom_, latest_map_odom_tf);
+        geometry_msgs::TransformStamped latest_map_odom_tf;
+        geo::convert(latest_map_odom_, latest_map_odom_tf.transform);
 
         // Set frame id's and time stamp
-        latest_map_odom_tf.frame_id_ = map_frame_id_;
-        latest_map_odom_tf.child_frame_id_ = odom_frame_id_;
-        latest_map_odom_tf.stamp_ = scan->header.stamp;
+        latest_map_odom_tf.header.frame_id = map_frame_id_;
+        latest_map_odom_tf.child_frame_id = odom_frame_id_;
+        latest_map_odom_tf.header.stamp = scan->header.stamp;
 
         // Publish TF
         tf_broadcaster_->sendTransform(latest_map_odom_tf);
