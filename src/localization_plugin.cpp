@@ -79,7 +79,7 @@ LocalizationPlugin::~LocalizationPlugin()
     }
     catch (tf2::TransformException ex)
     {
-        ROS_ERROR("[ED Localization] %s",ex.what());
+        ROS_ERROR_STREAM_NAMED("Localization", ex.what());
     }
 }
 
@@ -189,8 +189,8 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
     std::map<std::string, double> ros_param_position;
     if (!nh.getParam("initial_pose", ros_param_position))
     {
-        std::string msg = "[ED Localization] Could not read initial pose from the parameter server";
-        ROS_WARN_STREAM(msg);
+        std::string msg = "Could not read initial pose from the parameter server";
+        ROS_WARN_STREAM_NAMED("Localization", msg);
         throw ConfigurationException(msg);
     }
 
@@ -203,8 +203,8 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
 
     if (!tf_buffer_.canTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
     {
-        std::string msg = "[ED Localization] no transform between odom and base_link";
-        ROS_ERROR_STREAM(msg);
+        std::string msg = "No transform between odom and base_link";
+        ROS_ERROR_STREAM_NAMED("Localization", msg);
         throw ConfigurationException(msg);
     }
 
@@ -223,15 +223,15 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
         result.t.y = pos_map_baselink.y();
         result.setRotation(rotation_map_baselink.getAngle());
 
-        ROS_DEBUG_STREAM("[ED Localization] Initial pose from parameter server: [" <<
+        ROS_DEBUG_STREAM_NAMED("Localization", "Initial pose from parameter server: [" <<
             result.t.x << ", " << result.t.y << "], yaw:" << result.rotation()
         );
         return result;
     }
     catch (tf2::TransformException ex)
     {
-        std::string msg = "[ED Localization] %s" + std::string(ex.what());
-        ROS_ERROR_STREAM(msg);
+        std::string msg = std::string(ex.what());
+        ROS_ERROR_STREAM_NAMED("Localization", msg);
         throw ConfigurationException(msg);
     }
 }
@@ -250,8 +250,8 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromConfig(tue::Configurati
     }
     else
     {
-        std::string message = "[ED Localization] Initial pose not present in config";
-        ROS_WARN_STREAM(message);
+        std::string message = "Initial pose not present in config";
+        ROS_WARN_STREAM_NAMED("Localization", message);
         throw ConfigurationException(message);
     }
 
@@ -311,7 +311,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
 
     if (particle_filter_.samples().empty())
     {
-        ROS_ERROR("[ED Localization](update) Empty particle filter");
+        ROS_ERROR_NAMED("Localization", "(update) Empty particle filter");
         return UNKNOWN_ERROR;
     }
 
@@ -357,7 +357,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     bool resampled = false;
     if (update_)
     {
-        ROS_DEBUG("[ED Localization] Updating laser");
+        ROS_DEBUG_NAMED("Localization", "Updating laser");
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         // -     Update sensor
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -384,7 +384,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(resampled || force_publication)
     {
-        ROS_DEBUG("[ED Localization] Updating map_odom");
+        ROS_DEBUG_NAMED("Localization", "Updating map_odom");
         // Get the best pose (2D)
         geo::Transform2 mean_pose = particle_filter_.calculateMeanPose();
         ROS_DEBUG_STREAM("mean_pose: x: " << mean_pose.t.x << ", y: " << mean_pose.t.y << ", yaw: " << mean_pose.rotation());
@@ -402,7 +402,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (latest_map_odom_valid_)
     {
-        ROS_DEBUG_THROTTLE(2, "[ED Localization] Publishing map_odom");
+        ROS_DEBUG_THROTTLE_NAMED(2, "Localization", "Publishing map_odom");
         // Convert to TF transform
         geometry_msgs::TransformStamped latest_map_odom_tf;
         geo::convert(latest_map_odom_, latest_map_odom_tf.transform);
@@ -426,7 +426,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
 
     if (visualize_)
     {
-        ROS_DEBUG("[ED Localization] Visualize");
+        ROS_DEBUG_NAMED("Localization", "Visualize");
         int grid_size = 800;
         double grid_resolution = 0.025;
 
@@ -541,7 +541,7 @@ bool LocalizationPlugin::resample(const ed::WorldModel& world)
     if(++resample_count_ % resample_interval_)
         return false;
 
-    ROS_DEBUG("[ED Localization] resample particle filter");
+    ROS_DEBUG_NAMED("Localization", "resample particle filter");
     const std::function<void()> update_map_size_func = std::bind(&LocalizationPlugin::updateMapSize, this, std::ref(world));
     const std::function<geo::Transform2()> gen_random_pose_func = std::bind(&LocalizationPlugin::generateRandomPose, this, update_map_size_func);
     particle_filter_.resample(gen_random_pose_func);
@@ -552,7 +552,7 @@ bool LocalizationPlugin::resample(const ed::WorldModel& world)
 
 void LocalizationPlugin::publishParticles(const ros::Time &stamp)
 {
-    ROS_DEBUG("[ED Localization] Publishing particles");
+    ROS_DEBUG_NAMED("Localization", "Publishing particles");
     const std::vector<Sample>& samples = particle_filter_.samples();
     geometry_msgs::PoseArray particles_msg;
     particles_msg.poses.resize(samples.size());
