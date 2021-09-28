@@ -58,10 +58,10 @@ void ParticleFilter::configure(tue::Configuration config)
 
     kd_tree_.reset(new KDTree(max_samples_, cell_size));
 
-    ROS_INFO_STREAM("[ED Localization] min_samples: " << min_samples_ << ", max_samples: " << max_samples_);
-    ROS_INFO_STREAM("[ED Localization] kld_err: " << kld_err_ << ", kld_z: " << kld_z_);
-    ROS_INFO_STREAM("[ED Localization] recovery_alpha_slow: " << alpha_slow_ << ", recovery_alpha_fast: " << alpha_fast_);
-    ROS_INFO_STREAM("[ED Localization] cell_size_x: " << cell_size[0] << ", cell_size_y: " << cell_size[1] << ", cell_size_theta: " << cell_size[2]);
+    ROS_INFO_STREAM_NAMED("Localization", "min_samples: " << min_samples_ << ", max_samples: " << max_samples_ << std::endl
+                          << "kld_err: " << kld_err_ << ", kld_z: " << kld_z_ << std::endl
+                          << "recovery_alpha_slow: " << alpha_slow_ << ", recovery_alpha_fast: " << alpha_fast_ << std::endl
+                          << "cell_size_x: " << cell_size[0] << ", cell_size_y: " << cell_size[1] << ", cell_size_theta: " << cell_size[2]);
 }
 
 // ----------------------------------------------------------------------------------------------------
