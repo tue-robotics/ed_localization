@@ -98,6 +98,10 @@ void LocalizationPlugin::configure(tue::Configuration config)
 
     config.value("num_particles", num_particles_);
 
+    double tmp_transform_tolerance = 0.1;
+    config.value("transform_tolerance", tmp_transform_tolerance, tue::config::OPTIONAL);
+    transform_tolerance_.fromSec(tmp_transform_tolerance);
+
     if (config.hasError())
         return;
 
@@ -387,7 +391,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // Set frame id's and time stamp
     map_to_odom_tf.header.frame_id = map_frame_id_;
     map_to_odom_tf.child_frame_id = odom_frame_id_;
-    map_to_odom_tf.header.stamp = scan->header.stamp;
+    map_to_odom_tf.header.stamp = scan->header.stamp + transform_tolerance_;
 
     // Publish TF
     tf_broadcaster_->sendTransform(map_to_odom_tf);

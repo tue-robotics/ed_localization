@@ -7,6 +7,7 @@
 #include <geolib/sensors/LaserRangeFinder.h>
 
 // ROS
+#include <ros/duration.h>
 #include <ros/subscriber.h>
 #include <ros/publisher.h>
 #include <ros/callback_queue.h>
@@ -62,6 +63,8 @@ public:
 private:
 
     std::string robot_name_;
+
+    ros::Duration transform_tolerance_;
 
     // Configuration
     geo::Transform2 getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config);
