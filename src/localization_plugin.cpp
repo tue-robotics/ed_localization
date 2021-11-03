@@ -410,7 +410,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         // Set frame id's and time stamp
         latest_map_odom_tf.header.frame_id = map_frame_id_;
         latest_map_odom_tf.child_frame_id = odom_frame_id_;
-        latest_map_odom_tf.header.stamp = scan->header.stamp;
+        latest_map_odom_tf.header.stamp = scan->header.stamp + transform_tolerance_;
 
         // Publish TF
         tf_broadcaster_->sendTransform(latest_map_odom_tf);
