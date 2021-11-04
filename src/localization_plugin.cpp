@@ -402,67 +402,9 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Visualization
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
     if (visualize_)
     {
-        ROS_DEBUG_NAMED("Localization", "Visualize");
-        int grid_size = 800;
-        double grid_resolution = 0.025;
-
-        cv::Mat rgb_image(grid_size, grid_size, CV_8UC3, cv::Scalar(10, 10, 10));
-
-        std::vector<geo::Vector3> sensor_points;
-        laser_model_.renderer().rangesToPoints(laser_model_.sensor_ranges(), sensor_points);
-
-        geo::Transform2 best_pose = (latest_map_odom_ * previous_odom_pose_).projectTo2d();
-
-        geo::Transform2 laser_pose = best_pose * laser_model_.laser_offset();
-        for(unsigned int i = 0; i < sensor_points.size(); ++i)
-        {
-            const geo::Vec2& p = laser_pose * geo::Vec2(sensor_points[i].x, sensor_points[i].y);
-            int mx = -(p.y - best_pose.t.y) / grid_resolution + grid_size / 2;
-            int my = -(p.x - best_pose.t.x) / grid_resolution + grid_size / 2;
-
-            if (mx >= 0 && my >= 0 && mx < grid_size && my <grid_size)
-            {
-                rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
-            }
-        }
-
-        const std::vector<geo::Vec2>& lines_start = laser_model_.lines_start();
-        const std::vector<geo::Vec2>& lines_end = laser_model_.lines_end();
-
-        for(unsigned int i = 0; i < lines_start.size(); ++i)
-        {
-            const geo::Vec2& p1 = lines_start[i];
-            int mx1 = -(p1.y - best_pose.t.y) / grid_resolution + grid_size / 2;
-            int my1 = -(p1.x - best_pose.t.x) / grid_resolution + grid_size / 2;
-
-            const geo::Vec2& p2 = lines_end[i];
-            int mx2 = -(p2.y - best_pose.t.y) / grid_resolution + grid_size / 2;
-            int my2 = -(p2.x - best_pose.t.x) / grid_resolution + grid_size / 2;
-
-            cv::line(rgb_image, cv::Point(mx1, my1), cv::Point(mx2, my2), cv::Scalar(255, 255, 255), 1);
-        }
-
-        const std::vector<Sample>& samples = particle_filter_.samples();
-        for(std::vector<Sample>::const_iterator it = samples.begin(); it != samples.end(); ++it)
-        {
-            const geo::Transform2& pose = it->pose;
-
-            // Visualize sensor
-            int lmx = -(pose.t.y - best_pose.t.y) / grid_resolution + grid_size / 2;
-            int lmy = -(pose.t.x - best_pose.t.x) / grid_resolution + grid_size / 2;
-            cv::circle(rgb_image, cv::Point(lmx,lmy), 0.1 / grid_resolution, cv::Scalar(0, 0, 255), 1);
-
-            geo::Vec2 d = pose.R * geo::Vec2(0.2, 0);
-            int dmx = -d.y / grid_resolution;
-            int dmy = -d.x / grid_resolution;
-            cv::line(rgb_image, cv::Point(lmx, lmy), cv::Point(lmx + dmx, lmy + dmy), cv::Scalar(0, 0, 255), 1);
-        }
-
-        cv::imshow("localization", rgb_image);
-        cv::waitKey(1);
+        visualize();
     }
     else
     {
@@ -602,7 +544,6 @@ TransformStatus LocalizationPlugin::transform(const std::string& target_frame, c
         {
             // Now we have to check if the error was an interpolation or extrapolation error
             // (i.e., the scan is too old or too new, respectively)
-
             geometry_msgs::TransformStamped latest_transform = tf_buffer_.lookupTransform(target_frame, source_frame, ros::Time(0));
 
             if (scan_buffer_.front()->header.stamp > latest_transform.header.stamp)
@@ -687,6 +628,70 @@ void LocalizationPlugin::updateMapSize(const ed::WorldModel& world)
     max_map_ = max;
     last_map_size_revision_ = world.revision();
 
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::visualize()
+{
+    ROS_DEBUG_NAMED("Localization", "Visualize");
+    int grid_size = 800;
+    double grid_resolution = 0.025;
+
+    cv::Mat rgb_image(grid_size, grid_size, CV_8UC3, cv::Scalar(10, 10, 10));
+
+    std::vector<geo::Vector3> sensor_points;
+    laser_model_.renderer().rangesToPoints(laser_model_.sensor_ranges(), sensor_points);
+
+    geo::Transform2 best_pose = (latest_map_odom_ * previous_odom_pose_).projectTo2d();
+
+    geo::Transform2 laser_pose = best_pose * laser_model_.laser_offset();
+    for(unsigned int i = 0; i < sensor_points.size(); ++i)
+    {
+        const geo::Vec2& p = laser_pose * geo::Vec2(sensor_points[i].x, sensor_points[i].y);
+        int mx = -(p.y - best_pose.t.y) / grid_resolution + grid_size / 2;
+        int my = -(p.x - best_pose.t.x) / grid_resolution + grid_size / 2;
+
+        if (mx >= 0 && my >= 0 && mx < grid_size && my <grid_size)
+        {
+            rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
+        }
+    }
+
+    const std::vector<geo::Vec2>& lines_start = laser_model_.lines_start();
+    const std::vector<geo::Vec2>& lines_end = laser_model_.lines_end();
+
+    for(unsigned int i = 0; i < lines_start.size(); ++i)
+    {
+        const geo::Vec2& p1 = lines_start[i];
+        int mx1 = -(p1.y - best_pose.t.y) / grid_resolution + grid_size / 2;
+        int my1 = -(p1.x - best_pose.t.x) / grid_resolution + grid_size / 2;
+
+        const geo::Vec2& p2 = lines_end[i];
+        int mx2 = -(p2.y - best_pose.t.y) / grid_resolution + grid_size / 2;
+        int my2 = -(p2.x - best_pose.t.x) / grid_resolution + grid_size / 2;
+
+        cv::line(rgb_image, cv::Point(mx1, my1), cv::Point(mx2, my2), cv::Scalar(255, 255, 255), 1);
+    }
+
+    const std::vector<Sample>& samples = particle_filter_.samples();
+    for(std::vector<Sample>::const_iterator it = samples.begin(); it != samples.end(); ++it)
+    {
+        const geo::Transform2& pose = it->pose;
+
+        // Visualize sensor
+        int lmx = -(pose.t.y - best_pose.t.y) / grid_resolution + grid_size / 2;
+        int lmy = -(pose.t.x - best_pose.t.x) / grid_resolution + grid_size / 2;
+        cv::circle(rgb_image, cv::Point(lmx,lmy), 0.1 / grid_resolution, cv::Scalar(0, 0, 255), 1);
+
+        geo::Vec2 d = pose.R * geo::Vec2(0.2, 0);
+        int dmx = -d.y / grid_resolution;
+        int dmy = -d.x / grid_resolution;
+        cv::line(rgb_image, cv::Point(lmx, lmy), cv::Point(lmx + dmx, lmy + dmy), cv::Scalar(0, 0, 255), 1);
+    }
+
+    cv::imshow("localization", rgb_image);
+    cv::waitKey(1);
 }
 
 // ----------------------------------------------------------------------------------------------------
