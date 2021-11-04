@@ -144,6 +144,8 @@ private:
 
     void publishParticles(const ros::Time& stamp);
 
+    void updateMapOdom(const geo::Pose3D& odom_to_base_link);
+
     void publishMapOdom(const ros::Time &stamp);
 
     TransformStatus transform(const std::string& target_frame, const std::string& source_frame,

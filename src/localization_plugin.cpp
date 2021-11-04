@@ -384,17 +384,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if(resampled || force_publication)
     {
-        ROS_DEBUG_NAMED("Localization", "Updating map_odom");
-        // Get the best pose (2D)
-        geo::Transform2 mean_pose = particle_filter_.calculateMeanPose();
-        ROS_DEBUG_STREAM("mean_pose: x: " << mean_pose.t.x << ", y: " << mean_pose.t.y << ", yaw: " << mean_pose.rotation());
-
-        // Convert best pose to 3D
-        geo::Pose3D map_to_base_link;
-        map_to_base_link = mean_pose.projectTo3d();
-
-        latest_map_odom_ = map_to_base_link * odom_to_base_link.inverse();
-        latest_map_odom_valid_ = true;
+        updateMapOdom(odom_to_base_link);
     }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -558,6 +548,23 @@ void LocalizationPlugin::publishParticles(const ros::Time &stamp)
     particles_msg.header.stamp = stamp;
 
     pub_particles_.publish(particles_msg);
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::updateMapOdom(const geo::Pose3D& odom_to_base_link)
+{
+    ROS_DEBUG_NAMED("Localization", "Updating map_odom");
+    // Get the best pose (2D)
+    geo::Transform2 mean_pose = particle_filter_.calculateMeanPose();
+    ROS_DEBUG_STREAM("mean_pose: x: " << mean_pose.t.x << ", y: " << mean_pose.t.y << ", yaw: " << mean_pose.rotation());
+
+    // Convert best pose to 3D
+    geo::Pose3D map_to_base_link;
+    map_to_base_link = mean_pose.projectTo3d();
+
+    latest_map_odom_ = map_to_base_link * odom_to_base_link.inverse();
+    latest_map_odom_valid_ = true;
 }
 
 // ----------------------------------------------------------------------------------------------------
