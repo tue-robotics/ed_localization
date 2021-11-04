@@ -294,10 +294,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
 TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const ed::WorldModel& world, ed::UpdateRequest& req)
 {
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Get transformation from base_link to laser_frame
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
+    //  Get transformation from base_link to laser_frame
     if (!laser_offset_initialized_)
     {
         TransformStatus ts = initLaserOffset(scan->header.frame_id, scan->header.stamp);
@@ -305,20 +302,16 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
             return ts;
     }
 
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Check if particle filter is initialized
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+    // Check if particle filter is initialized
     if (particle_filter_.samples().empty())
     {
         ROS_ERROR_NAMED("Localization", "(update) Empty particle filter");
         return UNKNOWN_ERROR;
     }
 
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Calculate delta movement based on odom (fetched from TF)
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+    // Calculate delta movement based on odom (fetched from TF)
     geo::Pose3D odom_to_base_link;
     geo::Transform2 movement;
 
@@ -347,10 +340,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     }
     else if (have_previous_odom_pose_ && update_)
     {
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        // -     Update motion
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
+        // Update motion
         odom_model_.updatePoses(movement, particle_filter_);
     }
 
@@ -358,9 +348,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     if (update_)
     {
         ROS_DEBUG_NAMED("Localization", "Updating laser");
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        // -     Update sensor
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // Update sensor
         laser_model_.updateWeights(world, *scan, particle_filter_);
 
         previous_odom_pose_ = odom_to_base_link;
@@ -368,28 +356,21 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
 
         update_ = false;
 
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        // -     (Re)sample
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+        // (Re)sample
         resampled = resample(world);
 
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        // -     Publish particles
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+        // Publish particles
         publishParticles(scan->header.stamp);
     }
 
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Update map-odom
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Update map-odom
     if(resampled || force_publication)
     {
         updateMapOdom(odom_to_base_link);
     }
 
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Publish result
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Publish result
     if (latest_map_odom_valid_)
     {
         publishMapOdom(scan->header.stamp);
@@ -399,9 +380,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
             req.setPose(robot_name_, latest_map_odom_ * previous_odom_pose_);
     }
 
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Visualization
-    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // Visualization
     if (visualize_)
     {
         visualize();
