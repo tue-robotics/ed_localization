@@ -402,18 +402,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     if (latest_map_odom_valid_)
     {
-        ROS_DEBUG_THROTTLE_NAMED(2, "Localization", "Publishing map_odom");
-        // Convert to TF transform
-        geometry_msgs::TransformStamped latest_map_odom_tf;
-        geo::convert(latest_map_odom_, latest_map_odom_tf.transform);
-
-        // Set frame id's and time stamp
-        latest_map_odom_tf.header.frame_id = map_frame_id_;
-        latest_map_odom_tf.child_frame_id = odom_frame_id_;
-        latest_map_odom_tf.header.stamp = scan->header.stamp + transform_tolerance_;
-
-        // Publish TF
-        tf_broadcaster_->sendTransform(latest_map_odom_tf);
+        publishMapOdom(scan->header.stamp);
 
         // This should be executed allways. map_odom * odom_base_link
         if (!robot_name_.empty())
@@ -569,6 +558,24 @@ void LocalizationPlugin::publishParticles(const ros::Time &stamp)
     particles_msg.header.stamp = stamp;
 
     pub_particles_.publish(particles_msg);
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationPlugin::publishMapOdom(const ros::Time &stamp)
+{
+    ROS_DEBUG_THROTTLE_NAMED(2, "Localization", "Publishing map_odom");
+    // Convert to TF transform
+    geometry_msgs::TransformStamped latest_map_odom_tf;
+    geo::convert(latest_map_odom_, latest_map_odom_tf.transform);
+
+    // Set frame id's and time stamp
+    latest_map_odom_tf.header.frame_id = map_frame_id_;
+    latest_map_odom_tf.child_frame_id = odom_frame_id_;
+    latest_map_odom_tf.header.stamp = stamp + transform_tolerance_;
+
+    // Publish TF
+    tf_broadcaster_->sendTransform(latest_map_odom_tf);
 }
 
 // ----------------------------------------------------------------------------------------------------
