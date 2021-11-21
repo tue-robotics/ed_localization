@@ -244,8 +244,9 @@ void LocalizationPlugin::initialize()
 
 /**
  * @brief fromPoseMsg create a 2dpose from the information in a posewithcovariance message
- * @param msg
- * @return
+ * @param msg shared pointer to the message
+ * @return 2D transform containing the pose
+ * @pre: rotation component of msg should encode a pure rotation around z
  */
 geo::Transform2 fromPoseMsg(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg)
 {
