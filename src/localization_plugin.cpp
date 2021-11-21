@@ -256,7 +256,8 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
         tf2::Quaternion q;
         tf2::convert(initial_pose_msg_->pose.pose.orientation, q);
 
-        double yaw = q.getAngle();
+        tf2::Vector3 axis = q.getAxis();
+        double yaw = q.getAngle() * std::signbit(axis.z());
 
         particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
                                      yaw - 0.1, yaw + 0.1, 0.05);
