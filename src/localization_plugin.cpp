@@ -242,6 +242,24 @@ void LocalizationPlugin::initialize()
 {
 }
 
+/**
+ * @brief fromPoseMsg create a 2dpose from the information in a posewithcovariance message
+ * @param msg
+ * @return
+ */
+geo::Transform2 fromPoseMsg(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg)
+{
+    tf2::Quaternion q;
+    tf2::convert(msg->pose.pose.orientation, q);
+
+    double yaw;
+    if (q.z() >= 0)
+        yaw = q.getAngle();
+    else
+        yaw = -q.getAngle();
+
+    return geo::Transform2(msg->pose.pose.position.x, msg->pose.pose.position.y, yaw);
+}
 // ----------------------------------------------------------------------------------------------------
 
 void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
@@ -252,15 +270,10 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     if (initial_pose_msg_)
     {
         // Set initial pose
-        geo::Vec2 p(initial_pose_msg_->pose.pose.position.x, initial_pose_msg_->pose.pose.position.y);
-        tf2::Quaternion q;
-        tf2::convert(initial_pose_msg_->pose.pose.orientation, q);
+        geo::Transform2 pose = fromPoseMsg(initial_pose_msg_);
 
-        tf2::Vector3 axis = q.getAxis();
-        double yaw = q.getAngle() * std::signbit(axis.z());
-
-        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                     yaw - 0.1, yaw + 0.1, 0.05);
+        particle_filter_.initUniform(pose.t - geo::Vec2(0.3, 0.3), pose.t + geo::Vec2(0.3, 0.3), 0.05,
+                                     pose.rotation() - 0.1, pose.rotation() + 0.1, 0.05);
     }
 
     while(!scan_buffer_.empty())
