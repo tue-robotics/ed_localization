@@ -252,14 +252,12 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     if (initial_pose_msg_)
     {
         // Set initial pose
-        geo::Vec2 p(initial_pose_msg_->pose.pose.position.x, initial_pose_msg_->pose.pose.position.y);
-        tf2::Quaternion q;
-        tf2::convert(initial_pose_msg_->pose.pose.orientation, q);
+        geo::Pose3D pose;
+        geo::convert(initial_pose_msg_->pose.pose, pose);
+        geo::Transform2 pose2d = pose.projectTo2d();
 
-        double yaw = q.getAngle();
-
-        particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), 0.05,
-                                     yaw - 0.1, yaw + 0.1, 0.05);
+        particle_filter_.initUniform(pose2d.t - geo::Vec2(0.3, 0.3), pose2d.t + geo::Vec2(0.3, 0.3), 0.05,
+                                     pose2d.rotation() - 0.1, pose2d.rotation() + 0.1, 0.05);
     }
 
     while(!scan_buffer_.empty())
