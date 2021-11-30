@@ -1,11 +1,67 @@
 #include "particle_filter.h"
 
 #include <algorithm>
+#include <cmath>
+
+#include <ros/console.h>
 
 // ----------------------------------------------------------------------------------------------------
 
-ParticleFilter::ParticleFilter() : i_current_(0)
+ParticleFilter::ParticleFilter() :
+    min_samples_(0),
+    max_samples_(0),
+    kld_err_(0),
+    kld_z_(0),
+    alpha_slow_(0),
+    alpha_fast_(0),
+    w_slow_(0),
+    w_fast_(0),
+    i_current_(0),
+    kd_tree_(nullptr)
 {
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void ParticleFilter::configure(tue::Configuration config)
+{
+    // Extra variable needed as tue::Configuration doesn't support
+    // unisgned interters
+    int min, max;
+    config.value("min_particles", min);
+    config.value("max_particles", max);
+    min_samples_ = min;
+    max_samples_ = max;
+
+    kld_err_ = 0.01;
+    kld_z_ = 0.99;
+    config.value("kld_err", kld_err_, tue::config::OPTIONAL);
+    config.value("kld_z", kld_z_, tue::config::OPTIONAL);
+
+    alpha_slow_ = 0;
+    alpha_fast_ = 0;
+    config.value("recovery_alpha_slow", alpha_slow_, tue::config::OPTIONAL);
+    config.value("recovery_alpha_fast", alpha_fast_, tue::config::OPTIONAL);
+
+    std::array<double, 3> cell_size = {0.5, 0.5, 10*M_PI/180};
+    config.value("cell_size_x", cell_size[0], tue::config::OPTIONAL);
+    config.value("cell_size_y", cell_size[1], tue::config::OPTIONAL);
+    config.value("cell_size_theta", cell_size[2], tue::config::OPTIONAL);
+
+    samples_[0].reserve(max_samples_);
+    samples_[1].reserve(max_samples_);
+
+    cluster_cache_.reserve(max_samples_);
+
+    limit_cache_.clear();
+    limit_cache_.resize(max_samples_, 0);
+
+    kd_tree_.reset(new KDTree(max_samples_, cell_size));
+
+    ROS_INFO_STREAM_NAMED("Localization", "min_samples: " << min_samples_ << ", max_samples: " << max_samples_ << std::endl
+                          << "kld_err: " << kld_err_ << ", kld_z: " << kld_z_ << std::endl
+                          << "recovery_alpha_slow: " << alpha_slow_ << ", recovery_alpha_fast: " << alpha_fast_ << std::endl
+                          << "cell_size_x: " << cell_size[0] << ", cell_size_y: " << cell_size[1] << ", cell_size_theta: " << cell_size[2]);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -16,18 +72,33 @@ ParticleFilter::~ParticleFilter()
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::initUniform(const geo::Vec2& min, const geo::Vec2& max, double t_step,
-                                 double a_min, double a_max, double a_step)
+void ParticleFilter::initUniform(const geo::Vec2& min, const geo::Vec2& max, double a_min, double a_max)
 {
+    clearCache();
+
     std::vector<Sample>& smpls = samples();
 
     smpls.clear();
-    for(double x = min.x; x < max.x; x += t_step)
-        for(double y = min.y; y < max.y; y += t_step)
-            for(double a = a_min; a < a_max; a += a_step)
+
+    const double range_x = max.x - min.x;
+    const double range_y = max.y - min.y;
+    const double range_yaw = a_max - a_min;
+
+    const double cbrt_samples = ceil(std::cbrt(max_samples_));
+    const double step_x = range_x / cbrt_samples;
+    const double step_y = range_y / cbrt_samples;
+    const double step_yaw = range_yaw / cbrt_samples;
+
+    for(double x = min.x; x < max.x; x += step_x)
+        for(double y = min.y; y < max.y; y += step_y)
+            for(double a = a_min; a < a_max; a += step_yaw)
                 smpls.push_back(Sample(geo::Transform2(x, y, a)));
 
     setUniformWeights();
+
+    kd_tree_->clear();
+    for (const Sample& sample : samples())
+        kd_tree_->insert(sample.pose, sample.weight);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -39,7 +110,7 @@ bool compareSamples(const Sample& a, const Sample& b)
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::resample(unsigned int num_samples)
+void ParticleFilter::resample(std::function<geo::Transform2()> gen_random_pose_function)
 {
     std::vector<Sample>& old_samples = samples_[i_current_];
     std::vector<Sample>& new_samples = samples_[1 - i_current_];
@@ -47,57 +118,95 @@ void ParticleFilter::resample(unsigned int num_samples)
     if (old_samples.empty())
         return;
 
-    if (num_samples == 0)
-        num_samples = old_samples.size();
+    // Build up cumulative probability table for resampling.
+    // TODO: Replace this with a more efficient procedure
+    // (e.g., http://www.network-theory.co.uk/docs/gslref/GeneralDiscreteDistributions.html)
+    std::vector<double> c;
+    c.resize(old_samples.size() + 1, 0);
+    for (uint i=0; i<old_samples.size(); ++i)
+        c[i+1] = c[i]+ old_samples[i].weight;
 
-    // Sort all samples (decreasing weight)
-    std::sort(old_samples.begin(), old_samples.end(), compareSamples);
+    double w_diff = 1 - w_fast_ / w_slow_;
+    if(w_diff < 0)
+        w_diff = 0;
 
-    int k = 0;
-    new_samples.resize(num_samples);
-    for(std::vector<Sample>::const_iterator it = old_samples.begin(); it != old_samples.end(); ++it)
+    // Create the kd tree for adaptive sampling;
+    kd_tree_->clear();
+
+    // Draw samples from set a to create set b.
+    new_samples.clear();
+
+    while(new_samples.size() < max_samples_)
     {
-        const Sample& old_sample = *it;
+        new_samples.push_back(Sample());
+        Sample& new_sample = new_samples.back();
 
-        int l = std::min<int>(k + 1 + old_sample.weight * num_samples, num_samples - 1);
+        double r = drand48();
 
-        for(int i = k; i <= l; ++i)
-            new_samples[i] = old_sample;
+        if(r < w_diff)
+            new_sample.pose = gen_random_pose_function();
+        else
+        {
+            // Naive discrete event sampler
+            uint i=0;
+            for(; i<old_samples.size(); ++i)
+            {
+                if((c[i] <= r) && (r < c[i+1]))
+                    break;
+            }
 
-        k = l + 1;
+            // Add sample to list
+            new_sample.pose =  old_samples[i].pose;
+        }
 
-        if (k >= num_samples)
+        new_sample.weight = 1;
+
+        // Add sample to histogram
+        kd_tree_->insert(new_sample.pose, new_sample.weight);
+
+        // See if we have enough samples yet
+        if (new_samples.size() >= resampleLimit(kd_tree_->getLeafCount()))
             break;
     }
 
-//    // Build up cumulative probability table for resampling.
-//    std::vector<double> cum_weights(old_samples.size());
-//    cum_weights[0] = old_samples[0].weight;
-//    for(unsigned int i = 1; i < old_samples.size(); ++i)
-//        cum_weights[i] = cum_weights[i - 1] + old_samples[i].weight;
-
-//    new_samples.resize(num_samples);
-//    for(std::vector<Sample>::iterator it = new_samples.begin(); it != new_samples.end(); ++it)
-//    {
-//        Sample& new_sample = *it;
-
-//        double r = ((double) rand() / (RAND_MAX));
-
-//        unsigned int i_sample = 0;
-//        for(i_sample = 0; i_sample < old_samples.size(); ++i_sample)
-//        {
-//            if (r < cum_weights[i_sample])
-//                break;
-//        }
-
-//        new_sample = old_samples[i_sample];
-//    }
-
-//    new_samples[0] = best_sample;
-
-    i_current_ = 1 - i_current_;
+    switchSamples();
 
     normalize();
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+unsigned int ParticleFilter::resampleLimit(unsigned int k)
+{
+    if (limit_cache_[k-1] != 0)
+        return limit_cache_[k-1];
+
+    if (k <= 1)
+    {
+        limit_cache_[k-1] = max_samples_;
+        return max_samples_;
+    }
+
+    // double a = 1;
+    double b = 2 / (9 * (static_cast<double>(k - 1)));
+    double c = sqrt(2 / (9 * (static_cast<double>(k - 1)))) * kld_z_;
+    double x = 1 - b + c; // x = a - b + c
+
+    unsigned int n = std::ceil((k - 1) / (2 * kld_err_) * x * x * x);
+
+    if (n < min_samples_)
+    {
+        limit_cache_[k-1] = min_samples_;
+        return min_samples_;
+    }
+    if (n > max_samples_)
+    {
+        limit_cache_[k-1] = min_samples_;
+        return max_samples_;
+    }
+
+    limit_cache_[k-1] = n;
+    return n;
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -119,35 +228,38 @@ const Sample& ParticleFilter::bestSample() const
 
 // ----------------------------------------------------------------------------------------------------
 
-// TODO: deal with particle clusters (taking the average of multiple clusters of particles does not make sense)
+const std::vector<Cluster>& ParticleFilter::clusters() const
+{
+    if (cluster_cache_.empty())
+        computeClusterStats();
+
+    return cluster_cache_;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
 geo::Transform2 ParticleFilter::calculateMeanPose() const
 {
-    const std::vector<Sample>& smpls = samples();
+    const std::vector<Cluster>& clstrs = clusters();
 
-    geo::Transform2 mean;
-    mean.t = geo::Vec2(0, 0);
-    geo::Vec2 rot_v(0, 0);
+    geo::Transform2 mean(0, 0, 0);
 
-    for(std::vector<Sample>::const_iterator it = smpls.begin(); it != smpls.end(); ++it)
+    double max_weight = 0;
+    for(const Cluster& cluster : clstrs)
     {
-        const Sample& s = *it;
-        mean.t += s.weight * s.pose.matrix().t;
-        rot_v.x += s.weight * s.pose.matrix().R.xx;
-        rot_v.y += s.weight * s.pose.matrix().R.yx;
+        if (cluster.weight > max_weight)
+        {
+            mean = cluster.mean;
+            max_weight = cluster.weight;
+        }
     }
-
-    rot_v.normalize();
-    mean.R.xx = rot_v.x;
-    mean.R.yx = rot_v.y;
-    mean.R.xy = -mean.R.yx;
-    mean.R.yy = mean.R.xx;
 
     return mean;
 }
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::normalize()
+void ParticleFilter::normalize(bool update_filter)
 {
     std::vector<Sample>& smpls = samples();
 
@@ -155,8 +267,25 @@ void ParticleFilter::normalize()
     for(std::vector<Sample>::iterator it = smpls.begin(); it != smpls.end(); ++it)
         total_weight += it->weight;
 
+    double w_avg = total_weight / samples().size();
+
     if (total_weight > 0)
     {
+        if (update_filter)
+        {
+            // slow
+            if(w_slow_ == 0)
+                w_slow_ = w_avg;
+            else
+                w_slow_ += alpha_slow_ * (w_avg - w_slow_);
+
+            // Fast
+            if(w_fast_ == 0)
+              w_fast_ = w_avg;
+            else
+              w_fast_ += alpha_fast_ * (w_avg - w_fast_);
+        }
+
         for(std::vector<Sample>::iterator it = smpls.begin(); it != smpls.end(); ++it)
             it->weight /= total_weight;
     }
@@ -164,6 +293,109 @@ void ParticleFilter::normalize()
     {
         setUniformWeights();
     }
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void ParticleFilter::computeClusterStats() const
+{
+    // Cluster the samples
+    kd_tree_->cluster();
+
+    // Initialize overall filter stats
+    double weight = 0;
+    unsigned int count = 0;
+
+    // Workspace
+    std::array<double, 4> m{ {0, 0, 0, 0} };
+    std::array<std::array<double, 2>, 2> c{ {{0, 0}, {0, 0}} };
+
+    // Compute cluster stats
+    for (const Sample& sample : samples())
+    {
+        // Get the cluster label for this sample
+        int cidx = kd_tree_->getCluster(sample.pose);
+        if (cidx < 0)
+            continue;
+
+        if (static_cast<unsigned int>(cidx + 1) > cluster_cache_.size())
+            cluster_cache_.resize(cidx + 1);
+
+        Cluster& cluster = cluster_cache_[cidx];
+
+        cluster.count += 1;
+        count += 1;
+        cluster.weight += sample.weight;
+        weight += sample.weight;
+
+        // Compute mean
+        cluster.m[0] += sample.weight * sample.pose.t.x;
+        cluster.m[1] += sample.weight * sample.pose.t.y;
+        cluster.m[2] += sample.weight * cos(sample.pose.rotation());
+        cluster.m[3] += sample.weight * sin(sample.pose.rotation());
+
+        m[0] += cluster.m[0];
+        m[1] += cluster.m[1];
+        m[2] += cluster.m[2];
+        m[3] += cluster.m[3];
+
+        // Compute covariance in linear components
+        for (unsigned int j=0; j<2; ++j)
+        {
+            for (unsigned int k=0; k<2; ++k)
+            {
+                cluster.c[j][k] += sample.weight * sample.pose.t.m[j] * sample.pose.t.m[k];
+                c[j][k] += cluster.c[j][k];
+            }
+        }
+    }
+
+    // Normalize
+    for (Cluster& cluster : cluster_cache_)
+    {
+        cluster.mean.t.x = cluster.m[0] / cluster.weight;
+        cluster.mean.t.y = cluster.m[1] / cluster.weight;
+        cluster.mean.setRotation(atan2(cluster.m[3], cluster.m[2]));
+
+        // Covariance in linear components
+        for (unsigned int j=0; j<2; ++j)
+            for (unsigned int k=0; k<2; ++k)
+                cluster.cov.m[j * 3 + k] = cluster.c[j][k] / cluster.weight - cluster.mean.t.m[j] * cluster.mean.t.m[k];
+
+        // Covariance in angular components
+        cluster.cov.m[8] = -2 * log(sqrt(cluster.m[2] * cluster.m[2] + cluster.m[3] * cluster.m[3]));
+
+    }
+
+    // Compute overall filter stats
+    mean_cache_.t.x = m[0] / weight;
+    mean_cache_.t.y = m[1] / weight;
+    mean_cache_.setRotation(atan2(m[3], m[2]));
+
+    // Covariance in linear components
+    for (unsigned int j=0; j<2; ++j)
+        for (unsigned int k=0; k<2; ++k)
+            cov_cache_.m[j * 3 + k] = c[j][k] / weight - mean_cache_.t.m[j] * mean_cache_.t.m[k];
+
+    // Covariance in angular components
+    cov_cache_.m[8] = -2 * log(sqrt(m[2] * m[2] + m[3] * m[3]));
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void ParticleFilter::clearCache() const
+{
+    cluster_cache_.clear();
+    mean_cache_ = geo::Transform2::identity();
+    cov_cache_ = geo::Mat3::identity();
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void ParticleFilter::switchSamples()
+{
+    clearCache();
+    i_current_ = 1 - i_current_;
 }
 
 // ----------------------------------------------------------------------------------------------------

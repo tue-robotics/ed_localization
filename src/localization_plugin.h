@@ -26,6 +26,7 @@
 #include "odom_model.h"
 #include "laser_model.h"
 
+#include <functional>
 #include <memory>
 
 namespace tf2 {
@@ -64,65 +65,93 @@ private:
 
     std::string robot_name_;
 
+    // Config
+    bool visualize_;
+
+    int resample_interval_;
+    int resample_count_;
+
+    double update_min_d_;
+    double update_min_a_;
+
+    // PARTICLE FILTER
+    ParticleFilter particle_filter_;
+
+    // MODELS
+    LaserModel laser_model_;
+    OdomModel odom_model_;
+
+    // Poses
+    bool have_previous_odom_pose_;
+    geo::Pose3D previous_odom_pose_;
+
+    bool latest_map_odom_valid_;
+    geo::Pose3D latest_map_odom_;
+
+    // State
+    bool update_;
+    bool laser_offset_initialized_;
+
+    // random pose generation
+    geo::Vec2 min_map_, max_map_;
+    unsigned long last_map_size_revision_;
+
+    // Initial pose
+    geometry_msgs::PoseWithCovarianceStampedConstPtr initial_pose_msg_;
+
+    // Scan buffer
+    std::queue<sensor_msgs::LaserScanConstPtr> scan_buffer_;
+
+    std::string map_frame_id_;
+    std::string odom_frame_id_;
+    std::string base_link_frame_id_;
+
+    // TF2
     ros::Duration transform_tolerance_;
+    tf2_ros::Buffer tf_buffer_;
+    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
+    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+
+    // ROS
+    ros::CallbackQueue cb_queue_;
+    ros::Subscriber sub_laser_;
+    ros::Subscriber sub_initial_pose_;
+    ros::Publisher pub_particles_;
 
     // Configuration
     geo::Transform2 getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config);
     geo::Transform2 tryGetInitialPoseFromParamServer(const ros::NodeHandle& nh);
     geo::Transform2 tryGetInitialPoseFromConfig(tue::Configuration& config);
 
-    // PARTICLE FILTER
+    // Init
+    TransformStatus initLaserOffset(const std::string& frame_id, const ros::Time& stamp);
 
-    int num_particles_;
+    void initParticleFilterUniform(const geo::Transform2& pose);
 
-    ParticleFilter particle_filter_;
-
-
-    // MODELS
-
-    LaserModel laser_model_;
-    OdomModel odom_model_;
-
-
-    // ROS
-
-    ros::CallbackQueue cb_queue_;
-
-    ros::Subscriber sub_laser_;
-
+    // Callbacks
     void laserCallback(const sensor_msgs::LaserScanConstPtr& msg);
-
-    bool have_previous_pose_;
-    geo::Pose3D previous_pose_;
-
-    ros::Subscriber sub_initial_pose_;
-
-    geometry_msgs::PoseWithCovarianceStampedConstPtr initial_pose_msg_;
 
     void initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg);
 
-    ros::Publisher pub_particles_;
+    // random pose generation
+    geo::Transform2 generateRandomPose(std::function<void()> update_map_size);
 
-    bool laser_offset_initialized_;
-
-
-    // Scan buffer
-    std::queue<sensor_msgs::LaserScanConstPtr> scan_buffer_;
-
-
-    // TF2
-    std::string map_frame_id_;
-    std::string odom_frame_id_;
-    std::string base_link_frame_id_;
-
-    tf2_ros::Buffer tf_buffer_;
-    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
-    std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
+    void updateMapSize(const ed::WorldModel& world);
 
     TransformStatus update(const sensor_msgs::LaserScanConstPtr& laser_msg_, const ed::WorldModel& world, ed::UpdateRequest& req);
 
+    bool resample(const ed::WorldModel& world);
+
+    void publishParticles(const ros::Time& stamp);
+
+    void updateMapOdom(const geo::Pose3D& odom_to_base_link);
+
+    void publishMapOdom(const ros::Time &stamp);
+
     TransformStatus transform(const std::string& target_frame, const std::string& source_frame,
                               const ros::Time& time, tf2::Stamped<tf2::Transform>& transform);
+
+    void visualize();
 
 };
 

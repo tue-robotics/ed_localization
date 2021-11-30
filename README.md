@@ -20,7 +20,7 @@ Check out the following packages in your workspace:
 And compile
 
     cd <your_catkin_workspace>:
-    catkin_make
+    catkin build
 
 ## Tutorial
 
