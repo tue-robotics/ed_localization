@@ -525,7 +525,7 @@ TransformStatus LocalizationPlugin::transform(const std::string& target_frame, c
             // (i.e., the scan is too old or too new, respectively)
             geometry_msgs::TransformStamped latest_transform = tf_buffer_.lookupTransform(target_frame, source_frame, ros::Time(0));
 
-            if (scan_buffer_.front()->header.stamp > latest_transform.header.stamp)
+            if (time > latest_transform.header.stamp)
             {
                 // Scan is too new
                 return TOO_RECENT;
