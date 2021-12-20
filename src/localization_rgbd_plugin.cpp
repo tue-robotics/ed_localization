@@ -297,13 +297,6 @@ void LocalizationRGBDPlugin::process(const ed::WorldModel& world, ed::UpdateRequ
 
 TransformStatus LocalizationRGBDPlugin::update(const rgbd::Image& img, const ed::WorldModel& world, ed::UpdateRequest& req)
 {
-    // Get transformation from base_link to camera frame
-    tf2::Stamped<tf2::Transform> camera_to_base_link_tf;
-    TransformStatus ts = transform(base_link_frame_id_, img.getFrameId(), ros::Time(img.getTimestamp()), camera_to_base_link_tf);
-    if (ts != OK)
-        return ts;
-
-
     // Check if particle filter is initialized
     if (particle_filter_.samples().empty())
     {
@@ -311,6 +304,11 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::Image& img, const ed:
         return UNKNOWN_ERROR;
     }
 
+    // Get transformation from base_link to camera frame
+    tf2::Stamped<tf2::Transform> camera_to_base_link_tf;
+    TransformStatus ts = transform(base_link_frame_id_, img.getFrameId(), ros::Time(img.getTimestamp()), camera_to_base_link_tf);
+    if (ts != OK)
+        return ts;
 
     // Calculate delta movement based on odom (fetched from TF)
     geo::Pose3D odom_to_base_link;
