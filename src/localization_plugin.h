@@ -89,7 +89,6 @@ private:
     geo::Pose3D latest_map_odom_;
 
     // State
-    bool update_;
     bool laser_offset_initialized_;
 
     // random pose generation

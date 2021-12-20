@@ -50,7 +50,6 @@ LocalizationPlugin::LocalizationPlugin() :
     update_min_a_(0),
     have_previous_odom_pose_(false),
     latest_map_odom_valid_(false),
-    update_(false),
     laser_offset_initialized_(false),
     last_map_size_revision_(0),
     tf_buffer_(),
@@ -322,12 +321,13 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
 
     geo::convert(odom_to_base_link_tf, odom_to_base_link);
 
+    bool update = false;
     if (have_previous_odom_pose_)
     {
         // Get displacement and project to 2D
         movement = (previous_odom_pose_.inverse() * odom_to_base_link).projectTo2d();
 
-        update_ = std::abs(movement.t.x) >= update_min_d_ || std::abs(movement.t.y) >= update_min_d_ || std::abs(movement.rotation()) >= update_min_a_;
+        update = std::abs(movement.t.x) >= update_min_d_ || std::abs(movement.t.y) >= update_min_d_ || std::abs(movement.rotation()) >= update_min_a_;
     }
 
     bool force_publication = false;
@@ -335,17 +335,17 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     {
         previous_odom_pose_ = odom_to_base_link;
         have_previous_odom_pose_ = true;
-        update_ = true;
+        update = true;
         force_publication = true;
     }
-    else if (have_previous_odom_pose_ && update_)
+    else if (have_previous_odom_pose_ && update)
     {
         // Update motion
         odom_model_.updatePoses(movement, particle_filter_);
     }
 
     bool resampled = false;
-    if (update_)
+    if (update)
     {
         ROS_DEBUG_NAMED("Localization", "Updating laser");
         // Update sensor
@@ -353,9 +353,6 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
 
         previous_odom_pose_ = odom_to_base_link;
         have_previous_odom_pose_ = true;
-
-        update_ = false;
-
 
         // (Re)sample
         resampled = resample(world);
