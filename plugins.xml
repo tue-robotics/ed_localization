@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<class_libraries>
+  <library path="lib/libed_localization_plugin">
+    <class type="LocalizationPlugin" base_class_type="ed::Plugin">
+      <description>Plugin to localize the robot with th use of laser scans and AMCL.</description>
+    </class>
+  </library>
+</class_libraries>

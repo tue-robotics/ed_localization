@@ -32,6 +32,7 @@
   <doc_depend>doxygen</doc_depend>
 
   <export>
+    <ed plugin="${prefix}/plugins.xml" />
     <rosdoc config="rosdoc.yaml" />
   </export>
 
