@@ -5,4 +5,9 @@
       <description>Plugin to localize the robot with th use of laser scans and AMCL.</description>
     </class>
   </library>
+  <library path="lib/libed_localization_tf_plugin">
+    <class name="ed_localization/localization_tf" type="LocalizationTFPlugin" base_class_type="ed::Plugin">
+      <description>Plugin set robot entity pose based on TF.</description>
+    </class>
+  </library>
 </class_libraries>
