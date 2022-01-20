@@ -5,6 +5,7 @@ add_compile_options(-Wall -Werror=all)
 add_compile_options(-Wextra -Werror=extra)
 
 find_package(catkin REQUIRED COMPONENTS
+  cv_bridge
   ed
   geometry_msgs
   rgbd

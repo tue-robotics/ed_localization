@@ -5,6 +5,8 @@
 #include <ros/node_handle.h>
 #include <ros/subscribe_options.h>
 
+#include <cv_bridge/cv_bridge.h>
+
 #include <ed/entity.h>
 #include <ed/world_model.h>
 #include <ed/update_request.h>
@@ -28,6 +30,12 @@
 
 #include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/TransformStamped.h>
+
+#include <rgbd/ros/conversions.h>
+
+#include <tue_msgs/GetMaskedImage.h>
+
+#include <future>
 
 class ConfigurationException: public std::exception
 {
@@ -101,6 +109,7 @@ void LocalizationRGBDPlugin::configure(tue::Configuration config)
     config.value("update_min_a", update_min_a_);
 
     std::string rgbd_topic;
+    std::string masked_image_srv;
 
     if (config.readGroup("odom_model", tue::config::REQUIRED))
     {
@@ -115,6 +124,7 @@ void LocalizationRGBDPlugin::configure(tue::Configuration config)
     if (config.readGroup("rgbd_model", tue::config::REQUIRED))
     {
         config.value("topic", rgbd_topic);
+        config.value("masked_image_srv", masked_image_srv);
         rgbd_model_.configure(config);
         config.endGroup();
     }
@@ -135,6 +145,8 @@ void LocalizationRGBDPlugin::configure(tue::Configuration config)
     rgbd_client_.initialize(ros::names::resolve(rgbd_topic));
 
     ros::NodeHandle nh;
+
+    masked_image_srv_client_ = nh.serviceClient<tue_msgs::GetMaskedImage>(masked_image_srv);
 
     std::string initial_pose_topic;
     if (config.value("initial_pose_topic", initial_pose_topic, tue::config::OPTIONAL))
@@ -277,8 +289,8 @@ void LocalizationRGBDPlugin::process(const ed::WorldModel& world, ed::UpdateRequ
         initParticleFilterUniform(pose.projectTo2d());
     }
 
-    rgbd::Image img;
-    if (rgbd_client_.nextImage(img))
+    rgbd::ImagePtr img = rgbd_client_.nextImage();
+    if (img)
     {
          update(img, world, req);
     }
@@ -295,7 +307,7 @@ void LocalizationRGBDPlugin::process(const ed::WorldModel& world, ed::UpdateRequ
 
 // ----------------------------------------------------------------------------------------------------
 
-TransformStatus LocalizationRGBDPlugin::update(const rgbd::Image& img, const ed::WorldModel& world, ed::UpdateRequest& req)
+TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, const ed::WorldModel& world, ed::UpdateRequest& req)
 {
     // Check if particle filter is initialized
     if (particle_filter_.samples().empty())
@@ -304,9 +316,12 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::Image& img, const ed:
         return UNKNOWN_ERROR;
     }
 
+    auto a1 = std::async(std::launch::async, &LocalizationRGBDPlugin::getMaskedImage, this, img);
+
+
     // Get transformation from base_link to camera frame
     tf2::Stamped<tf2::Transform> camera_to_base_link_tf;
-    TransformStatus ts = transform(base_link_frame_id_, img.getFrameId(), ros::Time(img.getTimestamp()), camera_to_base_link_tf);
+    TransformStatus ts = transform(base_link_frame_id_, img->getFrameId(), ros::Time(img->getTimestamp()), camera_to_base_link_tf);
     if (ts != OK)
         return ts;
 
@@ -315,7 +330,7 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::Image& img, const ed:
     geo::Transform2 movement;
 
     tf2::Stamped<tf2::Transform> odom_to_base_link_tf;
-    ts = transform(odom_frame_id_, base_link_frame_id_, ros::Time(img.getTimestamp()), odom_to_base_link_tf);
+    ts = transform(odom_frame_id_, base_link_frame_id_, ros::Time(img->getTimestamp()), odom_to_base_link_tf);
     if (ts != OK)
         return ts;
 
@@ -347,9 +362,14 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::Image& img, const ed:
     bool resampled = false;
     if (update)
     {
-        ROS_WARN_NAMED("Localization", "Updating laser");
+        ROS_DEBUG_NAMED("Localization", "Updating laser");
         // Update sensor
-//        rgbd_model_.updateWeights(world, *scan, particle_filter_);
+        auto masked_image = a1.get();
+        if (!masked_image)
+        {
+            return UNKNOWN_ERROR;
+        }
+        rgbd_model_.updateWeights(world, masked_image, particle_filter_);
 
         previous_odom_pose_ = odom_to_base_link;
         have_previous_odom_pose_ = true;
@@ -358,7 +378,7 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::Image& img, const ed:
         resampled = resample(world);
 
         // Publish particles
-        publishParticles(ros::Time(img.getTimestamp()));
+        publishParticles(ros::Time(img->getTimestamp()));
     }
 
     // Update map-odom
@@ -370,7 +390,7 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::Image& img, const ed:
     // Publish result
     if (latest_map_odom_valid_)
     {
-        publishMapOdom(ros::Time(img.getTimestamp()));
+        publishMapOdom(ros::Time(img->getTimestamp()));
 
         // This should be executed allways. map_odom * odom_base_link
         if (!robot_name_.empty())
@@ -551,6 +571,28 @@ TransformStatus LocalizationRGBDPlugin::transform(const std::string& target_fram
 void LocalizationRGBDPlugin::initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg)
 {
     initial_pose_msg_ = msg;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+const MaskedImageConstPtr LocalizationRGBDPlugin::getMaskedImage(const rgbd::ImageConstPtr& img)
+{
+    tue_msgs::GetMaskedImageRequest srv_req;
+    tue_msgs::GetMaskedImageResponse srv_resp;
+    rgbd::convert(img->getRGBImage(), srv_req.input_image);
+    srv_req.input_image.header.frame_id = img->getFrameId();
+    srv_req.input_image.header.stamp = ros::Time(img->getTimestamp());
+    if (!masked_image_srv_client_.call(srv_req, srv_resp))
+    {
+        ROS_ERROR("Could not get masked image");
+        return nullptr;
+    }
+    MaskedImagePtr masked_image(new MaskedImage);
+    masked_image->rgbd_image = img;
+    masked_image->mask = cv_bridge::toCvCopy(srv_resp.output_image.image);
+    masked_image->labels = std::move(srv_resp.output_image.labels);
+
+    return masked_image;
 }
 
 // ----------------------------------------------------------------------------------------------------

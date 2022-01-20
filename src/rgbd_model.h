@@ -6,9 +6,19 @@
 
 #include <tue/config/configuration.h>
 
-#include <sensor_msgs/LaserScan.h>
+#include <cv_bridge/cv_bridge.h>
+#include <rgbd/types.h>
 
 class ParticleFilter;
+
+struct MaskedImage {
+    rgbd::ImageConstPtr rgbd_image;
+    cv_bridge::CvImageConstPtr mask;
+    std::vector<std::string> labels;
+};
+
+typedef boost::shared_ptr<MaskedImage> MaskedImagePtr;
+typedef boost::shared_ptr<const MaskedImage> MaskedImageConstPtr;
 
 class RGBDModel
 {
@@ -21,7 +31,7 @@ public:
 
     void configure(tue::Configuration config);
 
-    void updateWeights(const ed::WorldModel& world, const sensor_msgs::LaserScan& scan, ParticleFilter& pf);
+    void updateWeights(const ed::WorldModel& world, const MaskedImageConstPtr& masked_image, ParticleFilter& pf);
 
     const std::vector<geo::Vec2>& lines_start() const { return lines_start_; }
     const std::vector<geo::Vec2>& lines_end() const { return lines_end_; }

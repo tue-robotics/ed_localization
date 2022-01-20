@@ -8,6 +8,7 @@
 
 // ROS
 #include <ros/duration.h>
+#include <ros/service_client.h>
 #include <ros/subscriber.h>
 #include <ros/publisher.h>
 #include <ros/callback_queue.h>
@@ -16,7 +17,7 @@
 
 // RGBD
 #include <rgbd/client.h>
-#include <rgbd/image.h>
+#include <rgbd/types.h>
 
 // TF2
 #include <tf2/transform_datatypes.h>
@@ -29,6 +30,11 @@
 
 #include <functional>
 #include <memory>
+
+//namespace cv {
+//    typedef std::shared_ptr<Mat> MatPtr;
+//    typedef std::shared_ptr<const Mat> MatConstPtr;
+//}
 
 namespace tf2 {
     class Transform;
@@ -114,6 +120,7 @@ private:
     ros::CallbackQueue cb_queue_;
     ros::Subscriber sub_initial_pose_;
     ros::Publisher pub_particles_;
+    ros::ServiceClient masked_image_srv_client_;
     rgbd::Client rgbd_client_;
 
     // Configuration
@@ -134,6 +141,8 @@ private:
 
     void updateMapSize(const ed::WorldModel& world);
 
+    const MaskedImageConstPtr getMaskedImage(const rgbd::ImageConstPtr& img);
+
     /**
      * @brief
      * @param img Image Pointer, Can't be nullptr as no checks are performed
@@ -141,7 +150,7 @@ private:
      * @param req Update request to be filled
      * @return TransformStatus
      */
-    TransformStatus update(const rgbd::Image& img, const ed::WorldModel& world, ed::UpdateRequest& req);
+    TransformStatus update(const rgbd::ImageConstPtr& img, const ed::WorldModel& world, ed::UpdateRequest& req);
 
     bool resample(const ed::WorldModel& world);
 
