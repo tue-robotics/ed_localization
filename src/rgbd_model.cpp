@@ -1,57 +1,48 @@
 #include "rgbd_model.h"
 
 #include "particle_filter.h"
+
 #include <ed/world_model.h>
 #include <ed/entity.h>
-#include <geolib/Shape.h>
-
 #include <tue/profiling/timer.h>
+
+#include <geolib/Mesh.h>
+#include <geolib/sensors/DepthCamera.h>
+
+#include <opencv2/core/matx.hpp>
 
 // ----------------------------------------------------------------------------------------------------
 
-class LineRenderResult : public geo::LaserRangeFinder::RenderResult
+class SampleRenderResult : public geo::RenderResult
 {
 
 public:
 
-    LineRenderResult(std::vector<geo::Vec2>& lines_start, std::vector<geo::Vec2>& lines_end, double max_distance)
-        : geo::LaserRangeFinder::RenderResult(dummy_ranges_),
-          lines_start_(lines_start), lines_end_(lines_end), max_distance_sq_(max_distance * max_distance) {}
-
-    void renderLine(const geo::Vec2& p1, const geo::Vec2& p2)
+    SampleRenderResult(cv::Mat& depth_image, cv::Mat& type_image)
+        : geo::RenderResult(depth_image.cols, depth_image.rows), depth_image_(depth_image), type_image_(type_image)
     {
-        // Calculate distance to the line
-
-        geo::Vec2 diff = p2 - p1;
-        double line_length_sq = diff.length2();
-
-        double t = p1.dot(diff) / -line_length_sq;
-
-        double distance_sq;
-
-        if (t < 0)
-            distance_sq = p1.length2();
-        else if (t > 1)
-            distance_sq = p2.length2();
-        else
-            distance_sq = (p1 + t * diff).length2();
-
-        // If too far, skip
-        if (distance_sq > max_distance_sq_)
-            return;
-
-        lines_start_.push_back(p1);
-        lines_end_.push_back(p2);
     }
 
-private:
+    inline void setType(const unsigned int type) { type_ = type; }
 
-    std::vector<double> dummy_ranges_;
-    std::vector<geo::Vec2>& lines_start_;
-    std::vector<geo::Vec2>& lines_end_;
-    double max_distance_sq_;
+    void renderPixel(int x, int y, float depth, int i_triangle)
+    {
+        float old_depth = depth_image_.at<float>(y, x);
+        if (old_depth <= 0 || depth < old_depth)
+        {
+            depth_image_.at<float>(y, x) = depth;
+            type_image_.at<unsigned int>(y, x) = type_;
+        }
+    }
+
+protected:
+
+    cv::Mat& depth_image_;
+    cv::Mat& type_image_;
+    unsigned int type_;
 
 };
+
 
 // ----------------------------------------------------------------------------------------------------
 
