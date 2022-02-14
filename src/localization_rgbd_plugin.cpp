@@ -316,8 +316,7 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
         return UNKNOWN_ERROR;
     }
 
-    auto a1 = std::async(std::launch::async, &LocalizationRGBDPlugin::getMaskedImage, this, img);
-
+    auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDPlugin::getMaskedImage, this, img);
 
     // Get transformation from base_link to camera frame
     tf2::Stamped<tf2::Transform> camera_to_base_link_tf;
@@ -364,7 +363,7 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     {
         ROS_DEBUG_NAMED("Localization", "Updating laser");
         // Update sensor
-        auto masked_image = a1.get();
+        auto masked_image = masked_image_future.get();
         if (!masked_image)
         {
             return UNKNOWN_ERROR;
