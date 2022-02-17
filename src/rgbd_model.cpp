@@ -7,9 +7,19 @@
 #include <tue/profiling/timer.h>
 
 #include <geolib/Mesh.h>
+#include <geolib/Shape.h>
 #include <geolib/sensors/DepthCamera.h>
 
+#include <rgbd/view.h>
+
 #include <opencv2/core/matx.hpp>
+
+#include <vector>
+
+// TEMP
+#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <ros/console.h>
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -43,6 +53,46 @@ protected:
 
 };
 
+// ----------------------------------------------------------------------------------------------------
+
+bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera& cam, const geo::Pose3D& cam_pose_inv, cv::Mat& depth_image, cv::Mat& type_image)
+{
+    ROS_WARN("generateWMImages");
+    SampleRenderResult res(depth_image, type_image);
+
+    geo::RenderOptions opt;
+
+    // Types should be stored somewhere else
+    // ToDo: Move or reference
+    std::vector<std::string> labels;
+    labels.reserve(20); // Prevent reallocation with pushback
+
+    for(ed::WorldModel::const_iterator it = world_model.begin(); it != world_model.end(); ++it)
+    {
+        const ed::EntityConstPtr& e = *it;
+        const std::string& id = e->id().str();
+
+        if (e->shape() && e->has_pose() && (id.size() < 5 || id.substr(id.size() - 5) != "floor")) // Filter ground plane
+        {
+            geo::Pose3D pose = cam_pose_inv * e->pose();
+            geo::RenderOptions opt;
+            opt.setMesh(e->shape()->getMesh(), pose);
+
+            auto it = std::find(labels.begin(), labels.end(), e->type());
+            unsigned int index;
+            if (it == labels.end())
+            {
+                index = labels.size();
+                labels.push_back(e->type());
+            }
+            res.setType(index);
+
+            // Render
+            cam.render(opt, res);
+        }
+    }
+    return true;
+}
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -65,6 +115,7 @@ RGBDModel::RGBDModel()
 
 RGBDModel::~RGBDModel()
 {
+    cv::destroyAllWindows();
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -83,28 +134,29 @@ void RGBDModel::configure(tue::Configuration config)
     config.value("min_particle_distance", min_particle_distance_);
     config.value("min_particle_rotation_distance", min_particle_rotation_distance_);
 
-    // Pre-calculate expensive operations
-    int resolution = 1000; // mm accuracy
+//    // Pre-calculate expensive operations
+//    int resolution = 1000; // mm accuracy
 
-    exp_hit_.resize(range_max * resolution + 1);
-    for(unsigned int i = 0; i < exp_hit_.size(); ++i)
-    {
-        double z = static_cast<double>(i) / resolution;
-        exp_hit_[i] = exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
-    }
+//    exp_hit_.resize(range_max * resolution + 1);
+//    for(unsigned int i = 0; i < exp_hit_.size(); ++i)
+//    {
+//        double z = static_cast<double>(i) / resolution;
+//        exp_hit_[i] = exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
+//    }
 
-    exp_short_.resize(range_max * resolution + 1);
-    for(unsigned int i = 0; i < exp_hit_.size(); ++i)
-    {
-        double obs_range = static_cast<double>(i) / resolution;
-        exp_short_[i] = exp(-this->lambda_short * obs_range);
-    }
+//    exp_short_.resize(range_max * resolution + 1);
+//    for(unsigned int i = 0; i < exp_hit_.size(); ++i)
+//    {
+//        double obs_range = static_cast<double>(i) / resolution;
+//        exp_short_[i] = exp(-this->lambda_short * obs_range);
+//    }
 }
 
 // ----------------------------------------------------------------------------------------------------
 
-void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageConstPtr& masked_image, ParticleFilter& pf)
+void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageConstPtr& masked_image, const geo::Pose3D& cam_pose_inv, ParticleFilter& pf)
 {
+    ROS_WARN("updateWeights");
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Find unique samples
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -158,80 +210,66 @@ void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageCons
     if (unique_samples.size() == 1)
         return;
 
+    //    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    //    // -     Determine center and maximum range of world model cross section
+    //    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    //    // Find the bounding rectangle around all sample poses. This will be used to determine
+    //    // the largest render distance (anything max_range beyond the sample boundaries does
+    //    // not have to be considered)
+
+    //    geo::Vec2 sample_min(1e9, 1e9);
+    //    geo::Vec2 sample_max(-1e9, -1e9);
+    //    for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
+    //    {
+    //        Sample& sample = *it;
+
+    //        geo::Transform2 laser_pose = sample.pose * laser_offset_;
+
+    //        sample_min.x = std::min(sample_min.x, laser_pose.t.x);
+    //        sample_min.y = std::min(sample_min.y, laser_pose.t.y);
+    //        sample_max.x = std::max(sample_min.x, laser_pose.t.x);
+    //        sample_max.y = std::max(sample_min.y, laser_pose.t.y);
+    //    }
+
+    //    double temp_range_max = 0;
+    //    for(unsigned int i = 0; i < sensor_ranges_.size(); ++i)
+    //    {
+    //        double r = sensor_ranges_[i];
+    //        if (r < range_max)
+    //            temp_range_max = std::max(temp_range_max, r);
+    //    }
+
+    //    // Add a small buffer to the distance to allow model data that is
+    //    // slightly further away to still match
+    //    temp_range_max += lambda_short;
+
+    //    // Calculate the sample boundary center and boundary render distance
+    //    geo::Vec2 sample_center = (sample_min + sample_max) / 2;
+    //    double max_distance = (sample_max - sample_min).length() / 2 + temp_range_max;
+
+    //    // Set the range limit to the lrf renderer. This will make sure all shapes that
+    //    // are too far away will not be rendered (object selection, not line selection)
+    //    lrf_.setRangeLimits(scan.range_min, max_distance);
+
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // -     Update world renderer
+    // -     Render world model type/depth image
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-//    if (num_beams <= 0)
-//        num_beams = scan.ranges.size();
-//    else
-//        num_beams = std::min<int>(scan.ranges.size(), num_beams);
+    geo::DepthCamera cam(masked_image->rgbd_image->getCameraModel());
 
-//    int i_step = scan.ranges.size() / num_beams;
-//    sensor_ranges_.clear();
-//    for (unsigned int i = 0; i < scan.ranges.size(); i += i_step)
-//    {
-//        double r = scan.ranges[i];
+    cv::Size size = masked_image->rgbd_image->getRGBImage().size();
+    cv::Mat depth_image(size, CV_32FC1, 0.0);
+    cv::Mat type_image(size, CV_8UC1, UINT_MAX);
 
-//        // Check for Inf
-//        if (r != r || r > scan.range_max)
-//            r = 0;
-//        sensor_ranges_.push_back(r);
-//    }
-//    num_beams = sensor_ranges_.size();
+    tue::Timer timer;
+    timer.start();
+    bool success = generateWMImages(world, cam, cam_pose_inv, depth_image, type_image);
+    ROS_WARN_STREAM("Rendering took: " << timer.getElapsedTimeInMilliSec() << "ms.");
 
-//    if (lrf_.getNumBeams() != num_beams)
-//    {
-//        lrf_.setNumBeams(num_beams);
-//        lrf_.setAngleLimits(scan.angle_min, scan.angle_max);
-//        range_max = std::min<double>(range_max, scan.range_max);
-//    }
-
-//    // If the laser is upside down, we need to mirror the sensor data
-//    if (laser_upside_down_)
-//        std::reverse(sensor_ranges_.begin(), sensor_ranges_.end());
-
-//    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-//    // -     Determine center and maximum range of world model cross section
-//    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-//    // Find the bounding rectangle around all sample poses. This will be used to determine
-//    // the largest render distance (anything max_range beyond the sample boundaries does
-//    // not have to be considered)
-
-//    geo::Vec2 sample_min(1e9, 1e9);
-//    geo::Vec2 sample_max(-1e9, -1e9);
-//    for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
-//    {
-//        Sample& sample = *it;
-
-//        geo::Transform2 laser_pose = sample.pose * laser_offset_;
-
-//        sample_min.x = std::min(sample_min.x, laser_pose.t.x);
-//        sample_min.y = std::min(sample_min.y, laser_pose.t.y);
-//        sample_max.x = std::max(sample_min.x, laser_pose.t.x);
-//        sample_max.y = std::max(sample_min.y, laser_pose.t.y);
-//    }
-
-//    double temp_range_max = 0;
-//    for(unsigned int i = 0; i < sensor_ranges_.size(); ++i)
-//    {
-//        double r = sensor_ranges_[i];
-//        if (r < range_max)
-//            temp_range_max = std::max(temp_range_max, r);
-//    }
-
-//    // Add a small buffer to the distance to allow model data that is
-//    // slightly further away to still match
-//    temp_range_max += lambda_short;
-
-//    // Calculate the sample boundary center and boundary render distance
-//    geo::Vec2 sample_center = (sample_min + sample_max) / 2;
-//    double max_distance = (sample_max - sample_min).length() / 2 + temp_range_max;
-
-//    // Set the range limit to the lrf renderer. This will make sure all shapes that
-//    // are too far away will not be rendered (object selection, not line selection)
-//    lrf_.setRangeLimits(scan.range_min, max_distance);
+    ROS_WARN("Show Image");
+    cv::imshow("Rendered WM", type_image);
+    cv::waitKey(100);
 
 //    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 //    // -     Create world model cross section

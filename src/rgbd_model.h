@@ -31,7 +31,7 @@ public:
 
     void configure(tue::Configuration config);
 
-    void updateWeights(const ed::WorldModel& world, const MaskedImageConstPtr& masked_image, ParticleFilter& pf);
+    void updateWeights(const ed::WorldModel& world, const MaskedImageConstPtr& masked_image, const geo::Pose3D& cam_pose_invs, ParticleFilter& pf);
 
     const std::vector<geo::Vec2>& lines_start() const { return lines_start_; }
     const std::vector<geo::Vec2>& lines_end() const { return lines_end_; }

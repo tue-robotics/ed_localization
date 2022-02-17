@@ -324,6 +324,14 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     if (ts != OK)
         return ts;
 
+    const tf2::Matrix3x3& cam_basis = camera_to_base_link_tf.getBasis();
+    const tf2::Vector3& cam_origin = camera_to_base_link_tf.getOrigin();
+    geo::Pose3D camera_to_base_link(geo::Mat3(cam_basis[0][0], cam_basis[0][1], cam_basis[0][2],
+                                              cam_basis[1][0], cam_basis[1][1], cam_basis[1][2],
+                                              cam_basis[2][0], cam_basis[2][1], cam_basis[2][2]),
+                                    geo::Vec3(cam_origin[0], cam_origin[1], cam_origin[2]));
+
+
     // Calculate delta movement based on odom (fetched from TF)
     geo::Pose3D odom_to_base_link;
     geo::Transform2 movement;
@@ -368,7 +376,7 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
         {
             return UNKNOWN_ERROR;
         }
-        rgbd_model_.updateWeights(world, masked_image, particle_filter_);
+        rgbd_model_.updateWeights(world, masked_image, camera_to_base_link.inverse(), particle_filter_);
 
         previous_odom_pose_ = odom_to_base_link;
         have_previous_odom_pose_ = true;
