@@ -72,7 +72,6 @@ LocalizationRGBDPlugin::LocalizationRGBDPlugin() :
 
 LocalizationRGBDPlugin::~LocalizationRGBDPlugin()
 {
-
     // Get transform between map and odom frame
     try
     {
@@ -90,6 +89,8 @@ LocalizationRGBDPlugin::~LocalizationRGBDPlugin()
     {
         ROS_ERROR_STREAM_NAMED("Localization", ex.what());
     }
+
+    cv::destroyAllWindows();
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -411,7 +412,8 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     }
     else
     {
-        cv::destroyAllWindows();
+        if (cv::getWindowProperty("localization", cv::WND_PROP_AUTOSIZE) >= 0) // Way to check if the window is opened
+            cv::destroyWindow("localization");
     }
 
     return OK;
