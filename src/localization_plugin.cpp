@@ -62,7 +62,6 @@ LocalizationPlugin::LocalizationPlugin() :
 
 LocalizationPlugin::~LocalizationPlugin()
 {
-
     // Get transform between map and odom frame
     try
     {
@@ -80,6 +79,8 @@ LocalizationPlugin::~LocalizationPlugin()
     {
         ROS_ERROR_STREAM_NAMED("Localization", ex.what());
     }
+
+    cv::destroyAllWindows();
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -384,7 +385,8 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     }
     else
     {
-        cv::destroyAllWindows();
+        if (cv::getWindowProperty("localization", cv::WND_PROP_AUTOSIZE) >= 0) // Way to check if the window is opened
+            cv::destroyWindow("localization");
     }
 
     return OK;
