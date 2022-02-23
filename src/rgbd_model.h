@@ -50,6 +50,8 @@ public:
 
 private:
 
+    std::vector<std::string> labels_;
+
     double z_hit;
     double sigma_hit;
     double z_short;

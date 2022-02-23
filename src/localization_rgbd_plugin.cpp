@@ -36,6 +36,7 @@
 #include <tue_msgs/GetMaskedImage.h>
 
 #include <future>
+#include <math.h>
 
 class ConfigurationException: public std::exception
 {
@@ -325,13 +326,14 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     if (ts != OK)
         return ts;
 
-    const tf2::Matrix3x3& cam_basis = camera_to_base_link_tf.getBasis();
-    const tf2::Vector3& cam_origin = camera_to_base_link_tf.getOrigin();
-    geo::Pose3D camera_to_base_link(geo::Mat3(cam_basis[0][0], cam_basis[0][1], cam_basis[0][2],
-                                              cam_basis[1][0], cam_basis[1][1], cam_basis[1][2],
-                                              cam_basis[2][0], cam_basis[2][1], cam_basis[2][2]),
-                                    geo::Vec3(cam_origin[0], cam_origin[1], cam_origin[2]));
+    geo::Pose3D camera_to_base_link;
+    geo::convert(camera_to_base_link_tf, camera_to_base_link);
 
+//    ROS_ERROR_STREAM("BEFORE: " << camera_to_base_link);
+    geo::Pose3D rotate180 = geo::Pose3D::identity();
+    rotate180.R.setRPY(M_PI, 0, 0);
+    camera_to_base_link = camera_to_base_link * rotate180;
+//    ROS_ERROR_STREAM("AFTER: " << camera_to_base_link);
 
     // Calculate delta movement based on odom (fetched from TF)
     geo::Pose3D odom_to_base_link;

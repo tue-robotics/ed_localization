@@ -37,11 +37,16 @@ public:
 
     void renderPixel(int x, int y, float depth, int i_triangle)
     {
+//        auto& size = depth_image_.size;
+//        ROS_WARN_STREAM("Size: " << size[0] << " x " << size[1]);
+//        ROS_WARN_STREAM("y: " << y << ", x: " << x);
         float old_depth = depth_image_.at<float>(y, x);
+//        ROS_WARN_STREAM("old_depth: " << old_depth << std::endl << "depth: " << depth);
         if (old_depth <= 0 || depth < old_depth)
         {
+//            ROS_WARN("RENDER THAT SHIT");
             depth_image_.at<float>(y, x) = depth;
-            type_image_.at<unsigned int>(y, x) = type_;
+            type_image_.at<unsigned char>(y, x) = type_;
         }
     }
 
@@ -55,36 +60,44 @@ protected:
 
 // ----------------------------------------------------------------------------------------------------
 
-bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera& cam, const geo::Pose3D& cam_pose_inv, cv::Mat& depth_image, cv::Mat& type_image)
+bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera& cam, const geo::Pose3D& cam_pose_inv, cv::Mat& depth_image, cv::Mat& type_image, std::vector<std::string>& labels)
 {
-    ROS_WARN("generateWMImages");
     SampleRenderResult res(depth_image, type_image);
 
     geo::RenderOptions opt;
-
-    // Types should be stored somewhere else
-    // ToDo: Move or reference
-    std::vector<std::string> labels;
-    labels.reserve(20); // Prevent reallocation with pushback
 
     for(ed::WorldModel::const_iterator it = world_model.begin(); it != world_model.end(); ++it)
     {
         const ed::EntityConstPtr& e = *it;
         const std::string& id = e->id().str();
 
-        if (e->shape() && e->has_pose() && (id.size() < 5 || id.substr(id.size() - 5) != "floor")) // Filter ground plane
+        if (e->shape() && e->has_pose() && (id.size() < 5 || id.substr(id.size() - 5) != "floor") && !e->hasFlag("self")) // Filter ground plane
         {
+//            ROS_WARN_STREAM("Rendering: " << id);
             geo::Pose3D pose = cam_pose_inv * e->pose();
             geo::RenderOptions opt;
             opt.setMesh(e->shape()->getMesh(), pose);
 
-            auto it = std::find(labels.begin(), labels.end(), e->type());
+//            ROS_WARN_STREAM("type: " << e->type());
+            const std::string& type = e->type();
             unsigned int index;
-            if (it == labels.end())
+            if (type.empty())
             {
-                index = labels.size();
-                labels.push_back(e->type());
+                index = UINT8_MAX;
             }
+            else
+            {
+                auto it = std::find(labels.begin(), labels.end(), type);
+                index = it-labels.begin();
+                if (it == labels.end() && labels.size() < UINT8_MAX)
+                    labels.push_back(type);
+            }
+
+            // Should be commented/removed for perfomance
+//            if (labels.size() >= UINT8_MAX)
+//                ROS_ERROR_STREAM("Labels can not be longer than " << UINT8_MAX << ". As it the type image use UINT8");
+
+//            ROS_WARN_STREAM("type index: " << index);
             res.setType(index);
 
             // Render
@@ -98,6 +111,8 @@ bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera&
 
 RGBDModel::RGBDModel()
 {
+    labels_.reserve(10);
+
     // DEFAULT:
     z_hit = 0.95;
     sigma_hit = 0.2;
@@ -156,7 +171,6 @@ void RGBDModel::configure(tue::Configuration config)
 
 void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageConstPtr& masked_image, const geo::Pose3D& cam_pose_inv, ParticleFilter& pf)
 {
-    ROS_WARN("updateWeights");
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Find unique samples
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -256,20 +270,26 @@ void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageCons
     // -     Render world model type/depth image
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+    const geo::Transform2& sample = unique_samples.front();
+
+    geo::Pose3D cam_pose = sample.projectTo3d() * cam_pose_inv.inverse();
+
     geo::DepthCamera cam(masked_image->rgbd_image->getCameraModel());
 
     cv::Size size = masked_image->rgbd_image->getRGBImage().size();
     cv::Mat depth_image(size, CV_32FC1, 0.0);
-    cv::Mat type_image(size, CV_8UC1, UINT_MAX);
+    cv::Mat type_image(size, CV_8UC1, UINT8_MAX);
 
     tue::Timer timer;
     timer.start();
-    bool success = generateWMImages(world, cam, cam_pose_inv, depth_image, type_image);
+    bool success = generateWMImages(world, cam, cam_pose.inverse(), depth_image, type_image, labels_);
     ROS_WARN_STREAM("Rendering took: " << timer.getElapsedTimeInMilliSec() << "ms.");
 
     ROS_WARN("Show Image");
-    cv::imshow("Rendered WM", type_image);
-    cv::waitKey(100);
+    cv::Mat falseColorsMap;
+    cv::applyColorMap(20*type_image, falseColorsMap, cv::COLORMAP_AUTUMN);
+    cv::imshow("out", falseColorsMap);
+    cv::waitKey(1);
 
 //    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 //    // -     Create world model cross section
