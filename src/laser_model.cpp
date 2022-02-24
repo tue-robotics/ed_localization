@@ -55,19 +55,8 @@ private:
 
 // ----------------------------------------------------------------------------------------------------
 
-LaserModel::LaserModel()
+LaserModel::LaserModel() : z_hit(0.95), sigma_hit(0.2), z_short(0.1), z_max(0.05), lambda_short(0.1), range_max(10.), laser_height_(0), laser_offset_(geo::Transform2::identity())
 {
-    // DEFAULT:
-    z_hit = 0.95;
-    sigma_hit = 0.2;
-    z_short = 0.1;
-    z_max = 0.05;
-    z_rand = 0.05;
-    lambda_short = 0.1;
-    range_max = 10;      // m
-
-    laser_height_ = 0.3;
-    laser_offset_ = geo::Transform2(0.3, 0, 0);
 }
 
 // ----------------------------------------------------------------------------------------------------
