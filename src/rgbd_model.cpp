@@ -285,7 +285,6 @@ void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageCons
     bool success = generateWMImages(world, cam, cam_pose.inverse(), depth_image, type_image, labels_);
     ROS_WARN_STREAM("Rendering took: " << timer.getElapsedTimeInMilliSec() << "ms.");
 
-    ROS_WARN("Show Image");
     cv::Mat falseColorsMap;
     cv::applyColorMap(20*type_image, falseColorsMap, cv::COLORMAP_AUTUMN);
     cv::imshow("out", falseColorsMap);
