@@ -39,15 +39,6 @@ public:
     const geo::LaserRangeFinder& renderer() const { return lrf_; }
     const std::vector<double>& sensor_ranges() const { return sensor_ranges_; }
 
-    const geo::Transform2& laser_offset() const { return laser_offset_; }
-
-    void setLaserOffset(const geo::Transform2& offset, double height, bool upside_down)
-    {
-        laser_offset_ = offset;
-        laser_height_ = height;
-        laser_upside_down_ = upside_down;
-    }
-
 private:
 
     std::vector<std::string> labels_;
@@ -59,10 +50,6 @@ private:
     double z_rand;
     double lambda_short;
     double range_max;
-
-    double laser_height_;
-    geo::Transform2 laser_offset_;
-    bool laser_upside_down_;
 
     int num_beams;
 

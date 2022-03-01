@@ -121,9 +121,6 @@ RGBDModel::RGBDModel()
     z_rand = 0.05;
     lambda_short = 0.1;
     range_max = 10;      // m
-
-    laser_height_ = 0.3;
-    laser_offset_ = geo::Transform2(0.3, 0, 0);
 }
 
 // ----------------------------------------------------------------------------------------------------
