@@ -180,6 +180,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
 
     // unique samples
     std::vector<geo::Transform2> unique_samples;
+    unique_samples.reserve(pf.getMaxSamples());
 
     // mapping of samples from the particle filter to the unique sample list
     std::vector<unsigned int> sample_to_unique(pf.samples().size());
