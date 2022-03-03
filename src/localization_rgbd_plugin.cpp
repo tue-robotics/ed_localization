@@ -336,11 +336,9 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     geo::Pose3D camera_to_base_link;
     geo::convert(camera_to_base_link_tf, camera_to_base_link);
 
-//    ROS_ERROR_STREAM("BEFORE: " << camera_to_base_link);
     geo::Pose3D rotate180 = geo::Pose3D::identity();
     rotate180.R.setRPY(M_PI, 0, 0);
     camera_to_base_link = camera_to_base_link * rotate180;
-//    ROS_ERROR_STREAM("AFTER: " << camera_to_base_link);
 
     // Calculate delta movement based on odom (fetched from TF)
     geo::Pose3D odom_to_base_link;
