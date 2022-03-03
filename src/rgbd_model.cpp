@@ -12,6 +12,7 @@
 
 #include <rgbd/view.h>
 
+#include <ros/console.h>
 #include <opencv2/core/matx.hpp>
 
 #include <vector>
@@ -19,7 +20,7 @@
 // TEMP
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-#include <ros/console.h>
+
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -134,7 +135,7 @@ RGBDModel::~RGBDModel()
 
 void RGBDModel::configure(tue::Configuration config)
 {
-    config.value("num_beams", num_beams);
+    config.value("num_pixels", num_pixels_);
 
     config.value("z_hit", z_hit);
     config.value("sigma_hit", sigma_hit);
@@ -166,7 +167,7 @@ void RGBDModel::configure(tue::Configuration config)
 
 // ----------------------------------------------------------------------------------------------------
 
-void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageConstPtr& masked_image, const geo::Pose3D& cam_pose_inv, ParticleFilter& pf)
+bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const MaskedImageConstPtr>& masked_image_future, const geo::Pose3D& cam_to_baselink, ParticleFilter& pf)
 {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Find unique samples
@@ -267,25 +268,54 @@ void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageCons
     // -     Render world model type/depth image
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    const geo::Transform2& sample = unique_samples.front();
+    MaskedImageConstPtr masked_image;
+    if (!cam_.initialized())
+    {
+         // Getting the msaked image before rendering to get the parameters
+         masked_image = masked_image_future.get();
+         if (!masked_image)
+         {
+             ROS_ERROR("(RGBD) Could not get masked image");
+             return false;
+         }
+         cam_ = geo::DepthCamera(masked_image->rgbd_image->getCameraModel());
+         size_ = masked_image->rgbd_image->getRGBImage().size();
+    }
 
-    geo::Pose3D cam_pose = sample.projectTo3d() * cam_pose_inv.inverse();
+    std::vector<cv::Mat> depth_images;
+    std::vector<cv::Mat> type_images;
 
-    geo::DepthCamera cam(masked_image->rgbd_image->getCameraModel());
+    depth_images.resize(unique_samples.size(), cv::Mat(size_, CV_32FC1, 0.0));
+    type_images.resize(unique_samples.size(), cv::Mat(size_, CV_8UC1, UINT8_MAX));
 
-    cv::Size size = masked_image->rgbd_image->getRGBImage().size();
-    cv::Mat depth_image(size, CV_32FC1, 0.0);
-    cv::Mat type_image(size, CV_8UC1, UINT8_MAX);
+    for (uint i = 0; i < unique_samples.size(); ++i)
+    {
+        geo::Transform2& sample = unique_samples[i];
+        cv::Mat& depth_image = depth_images[i];
+        cv::Mat& type_image = type_images[i];
 
-    tue::Timer timer;
-    timer.start();
-    bool success = generateWMImages(world, cam, cam_pose.inverse(), depth_image, type_image, labels_);
-    ROS_WARN_STREAM("Rendering took: " << timer.getElapsedTimeInMilliSec() << "ms.");
+        geo::Pose3D cam_pose = sample.projectTo3d() * cam_to_baselink;
 
-    cv::Mat falseColorsMap;
-    cv::applyColorMap(20*type_image, falseColorsMap, cv::COLORMAP_AUTUMN);
-    cv::imshow("out", falseColorsMap);
-    cv::waitKey(1);
+//        tue::Timer timer;
+//        timer.start();
+        bool success = generateWMImages(world, cam_, cam_pose.inverse(), depth_image, type_image, labels_);
+//        ROS_WARN_STREAM("Rendering took: " << timer.getElapsedTimeInMilliSec() << "ms.");
+//        cv::Mat falseColorsMap;
+//        cv::applyColorMap(20*type_image, falseColorsMap, cv::COLORMAP_AUTUMN);
+//        cv::imshow("out", falseColorsMap);
+//        cv::waitKey(1);
+    }
+
+    if(!masked_image)
+    {
+        // If we didn't get the image before to get the camera info
+        masked_image = masked_image_future.get();
+        if (!masked_image)
+        {
+            ROS_ERROR("(RGBD) Could not get masked image");
+            return false;
+        }
+    }
 
 //    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 //    // -     Create world model cross section
@@ -390,15 +420,54 @@ void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageCons
 //        weight_updates[j] = p;
 //    }
 
-    std::vector<double> weight_updates(unique_samples.size());
-    std::srand(unsigned(std::time(nullptr)));
-    std::generate(weight_updates.begin(), weight_updates.end(), std::rand);
+
+    const cv::Mat& sensor_depth_image = masked_image->rgbd_image->getDepthImage();
+    const cv::Mat& sensor_type_image = masked_image->mask->image;
+    const std::vector<std::string>& sensor_labels = masked_image->labels;
+
+    std::vector<double> weight_updates(unique_samples.size(), 0.);
+
+    int total_pixels = size_.area();
+    if (num_pixels_ == 0)
+        num_pixels_ = total_pixels;
+    uint pixel_step = std::max(total_pixels/num_pixels_, 1);
+    for (uint sample_i = 0; sample_i < unique_samples.size(); ++sample_i)
+    {
+        const cv::Mat& depth_image = depth_images[sample_i];
+        const cv::Mat& type_image = type_images[sample_i];
+
+        double& p = weight_updates[sample_i];
+        for (uint i = 0; i<total_pixels; i+=pixel_step)
+        {
+            uchar sensor_label_index = sensor_type_image.at<uchar>(i);
+            uchar label_index = type_image.at<uchar>(i);
+            if (sensor_label_index == UINT8_MAX || label_index == UINT8_MAX)
+                continue; // Skip pixels that are not labeled
+            if (sensor_labels[sensor_label_index] == labels_[label_index])
+            {
+//                ROS_WARN_STREAM("Sensor label: " << sensor_labels[sensor_label_index] << std::endl << "Sampel label: " << labels_[label_index]);
+                ++p;
+            }
+        }
+        p /= num_pixels_;
+    }
+
+
+//    std::srand(unsigned(std::time(nullptr)));
+//    std::generate(weight_updates.begin(), weight_updates.end(), std::rand);
 
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update the particle filter
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
+    std::stringstream ss;
+    ss << "[";
+    for (auto& i : weight_updates)
+        ss << i << ", ";
+    ss << "]";
+
+    ROS_WARN_STREAM("Unique samples: " << ss.str());
     for(unsigned int j = 0; j < pf.samples().size(); ++j)
     {
         Sample& sample = pf.samples()[j];
@@ -406,6 +475,6 @@ void RGBDModel::updateWeights(const ed::WorldModel& world, const MaskedImageCons
     }
 
     pf.normalize(true);
+
+    return true;
 }
-
-

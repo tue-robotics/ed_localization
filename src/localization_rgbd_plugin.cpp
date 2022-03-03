@@ -377,14 +377,11 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     bool resampled = false;
     if (update)
     {
-        ROS_DEBUG_NAMED("Localization", "Updating laser");
+        ROS_DEBUG_NAMED("Localization", "Updating RGBD");
         // Update sensor
-        auto masked_image = masked_image_future.get();
-        if (!masked_image)
-        {
+        bool success = rgbd_model_.updateWeights(world, masked_image_future, camera_to_base_link, particle_filter_);
+        if (!success)
             return UNKNOWN_ERROR;
-        }
-        rgbd_model_.updateWeights(world, masked_image, camera_to_base_link.inverse(), particle_filter_);
 
         previous_odom_pose_ = odom_to_base_link;
         have_previous_odom_pose_ = true;
