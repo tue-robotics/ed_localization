@@ -81,6 +81,9 @@ private:
     double update_min_d_;
     double update_min_a_;
 
+    double initial_pose_d_;
+    double initial_pose_a_;
+
     // PARTICLE FILTER
     ParticleFilter particle_filter_;
 

@@ -59,6 +59,8 @@ LocalizationRGBDPlugin::LocalizationRGBDPlugin() :
     resample_count_(0),
     update_min_d_(0),
     update_min_a_(0),
+    initial_pose_d_(0),
+    initial_pose_a_(0),
     have_previous_odom_pose_(false),
     latest_map_odom_valid_(false),
     laser_offset_initialized_(false),
@@ -109,6 +111,11 @@ void LocalizationRGBDPlugin::configure(tue::Configuration config)
 
     config.value("update_min_d", update_min_d_);
     config.value("update_min_a", update_min_a_);
+
+    initial_pose_d_ = 0.3;
+    initial_pose_a_ = 0.15;
+    config.value("initial_pose_d", initial_pose_d_, tue::config::OPTIONAL);
+    config.value("initial_pose_a", initial_pose_a_, tue::config::OPTIONAL);
 
     std::string rgbd_topic;
     std::string masked_image_srv;
@@ -459,7 +466,9 @@ void LocalizationRGBDPlugin::initParticleFilterUniform(const geo::Transform2& po
 {
     const geo::Vec2& p = pose.getOrigin();
     const double yaw = pose.rotation();
-    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), yaw - 0.15, yaw + 0.15);
+    particle_filter_.initUniform(p - geo::Vec2(initial_pose_d_, initial_pose_d_),
+                                 p + geo::Vec2(initial_pose_d_, initial_pose_d_),
+                                 yaw - initial_pose_a_, yaw + initial_pose_a_);
     have_previous_odom_pose_ = false;
     resample_count_ = 0;
 }
