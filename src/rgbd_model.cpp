@@ -221,7 +221,10 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     // If there is only one unique sample, it means are particles are (almost) identical, and the laser model
     // update is not neccesary. This typically holds if the robot is standing still.
     if (unique_samples.size() == 1)
-        return;
+    {
+        ROS_ERROR("(RGBD) Only one unique sample found");
+        return false;
+    }
 
     //    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     //    // -     Determine center and maximum range of world model cross section
