@@ -56,7 +56,7 @@ private:
 
     int num_pixels_;
 
-    double min_particle_distance_;
+    double min_particle_distance_sq_;
     double min_particle_rotation_distance_;
 
     // CACHING

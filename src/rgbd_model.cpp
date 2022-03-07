@@ -144,7 +144,11 @@ void RGBDModel::configure(tue::Configuration config)
     config.value("z_rand", z_rand);
     config.value("lambda_short", lambda_short);
     config.value("range_max", range_max);
-    config.value("min_particle_distance", min_particle_distance_);
+
+    double min_particle_distance;
+    config.value("min_particle_distance", min_particle_distance);
+    min_particle_distance_sq_ = min_particle_distance * min_particle_distance;
+
     config.value("min_particle_rotation_distance", min_particle_rotation_distance_);
 
 //    // Pre-calculate expensive operations
@@ -185,8 +189,6 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     // mapping of samples from the particle filter to the unique sample list
     std::vector<unsigned int> sample_to_unique(pf.samples().size());
 
-    double min_particle_distance_sq = min_particle_distance_ * min_particle_distance_;
-
     for(unsigned int i = 0; i < pf.samples().size(); ++i)
     {
         const Sample& s1 = pf.samples()[i];
@@ -203,7 +205,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
                 rot_diff = 2 * M_PI - rot_diff;
 
             // Check if translation and rotational difference are within boundaries
-            if ((t1.t - t2.t).length2() < min_particle_distance_sq && rot_diff < min_particle_rotation_distance_)
+            if ((t1.t - t2.t).length2() < min_particle_distance_sq_ && rot_diff < min_particle_rotation_distance_)
             {
                 found = true;
                 sample_to_unique[i] = j;
