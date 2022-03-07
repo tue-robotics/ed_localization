@@ -184,7 +184,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
 
     // unique samples
     std::vector<geo::Transform2> unique_samples;
-    unique_samples.reserve(pf.getMaxSamples());
+    unique_samples.reserve(std::max<uint>(pf.getMaxSamples(), pf.samples().size()));
 
     // mapping of samples from the particle filter to the unique sample list
     std::vector<unsigned int> sample_to_unique(pf.samples().size());
@@ -291,25 +291,20 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     std::vector<cv::Mat> depth_images;
     std::vector<cv::Mat> type_images;
 
-    depth_images.resize(unique_samples.size(), cv::Mat(size_, CV_32FC1, 0.0));
-    type_images.resize(unique_samples.size(), cv::Mat(size_, CV_8UC1, UINT8_MAX));
+    depth_images.resize(unique_samples.size()); // Do not provide default object, as the cv::Mat copy constructor creates a new pointer to the same data
+    type_images.resize(unique_samples.size());
 
     for (uint i = 0; i < unique_samples.size(); ++i)
     {
-        geo::Transform2& sample = unique_samples[i];
+        const geo::Transform2& sample = unique_samples[i];
         cv::Mat& depth_image = depth_images[i];
         cv::Mat& type_image = type_images[i];
+        depth_image = cv::Mat(size_, CV_32FC1, 0.0);
+        type_image = cv::Mat(size_, CV_8UC1, UINT8_MAX);
 
-        geo::Pose3D cam_pose = sample.projectTo3d() * cam_to_baselink;
+        const geo::Pose3D cam_pose = sample.projectTo3d() * cam_to_baselink;
 
-//        tue::Timer timer;
-//        timer.start();
         bool success = generateWMImages(world, cam_, cam_pose.inverse(), depth_image, type_image, labels_);
-//        ROS_WARN_STREAM("Rendering took: " << timer.getElapsedTimeInMilliSec() << "ms.");
-//        cv::Mat falseColorsMap;
-//        cv::applyColorMap(20*type_image, falseColorsMap, cv::COLORMAP_AUTUMN);
-//        cv::imshow("out", falseColorsMap);
-//        cv::waitKey(1);
     }
 
     if(!masked_image)
