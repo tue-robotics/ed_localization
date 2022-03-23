@@ -59,7 +59,7 @@ public:
 
     void initUniform(const geo::Vec2& min, const geo::Vec2& max, double a_min, double a_max);
 
-    void resample(std::function<geo::Transform2()> gen_random_pose_function);
+    void resample(const std::function<geo::Transform2()>& gen_random_pose_function);
 
     unsigned int resampleLimit(unsigned int number_bins);
 

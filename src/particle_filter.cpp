@@ -110,7 +110,7 @@ bool compareSamples(const Sample& a, const Sample& b)
 
 // ----------------------------------------------------------------------------------------------------
 
-void ParticleFilter::resample(std::function<geo::Transform2()> gen_random_pose_function)
+void ParticleFilter::resample(const std::function<geo::Transform2()>& gen_random_pose_function)
 {
     std::vector<Sample>& old_samples = samples_[i_current_];
     std::vector<Sample>& new_samples = samples_[1 - i_current_];
