@@ -28,12 +28,13 @@
 #include <geolib/ros/msg_conversions.h>
 #include <geolib/ros/tf2_conversions.h>
 
-#include <geometry_msgs/PoseArray.h>
 #include <geometry_msgs/TransformStamped.h>
 
 #include <rgbd/ros/conversions.h>
 
 #include <tue_msgs/GetMaskedImage.h>
+
+#include <visualization_msgs/MarkerArray.h>
 
 #include <future>
 #include <math.h>
@@ -67,7 +68,8 @@ LocalizationRGBDPlugin::LocalizationRGBDPlugin() :
     last_map_size_revision_(0),
     tf_buffer_(),
     tf_listener_(nullptr),
-    tf_broadcaster_(nullptr)
+    tf_broadcaster_(nullptr),
+    old_msg_size_(0)
 {
 }
 
@@ -173,7 +175,7 @@ void LocalizationRGBDPlugin::configure(tue::Configuration config)
 
     config.value("robot_name", robot_name_);
 
-    pub_particles_ = nh.advertise<geometry_msgs::PoseArray>("ed/localization/particles", 10);
+    pub_particles_ = nh.advertise<visualization_msgs::MarkerArray>("ed/localization/particles", 10);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -447,19 +449,33 @@ void LocalizationRGBDPlugin::publishParticles(const ros::Time &stamp)
 {
     ROS_DEBUG_NAMED("Localization", "Publishing particles");
     const std::vector<Sample>& samples = particle_filter_.samples();
-    geometry_msgs::PoseArray particles_msg;
-    particles_msg.poses.resize(samples.size());
-    for(unsigned int i = 0; i < samples.size(); ++i)
+    visualization_msgs::MarkerArray particles_msg;
+    particles_msg.markers.resize(std::max<uint>(old_msg_size_, samples.size()));
+    for(uint i = 0; i < samples.size(); ++i)
     {
-        const geo::Transform2& p = samples[i].pose;
+        visualization_msgs::Marker& marker = particles_msg.markers[i];
+        const Sample& sample = samples[i];
+        marker.header.frame_id = map_frame_id_;
+        marker.header.stamp = stamp;
 
-        geo::Pose3D pose_3d = p.projectTo3d();
+        const geo::Transform2& p = sample.pose;
+        geo::convert(p.projectTo3d(), marker.pose);
 
-        geo::convert(pose_3d, particles_msg.poses[i]);
+        marker.type = marker.ARROW;
+        marker.ns = std::to_string(i);
+        marker.action = marker.ADD;
+        marker.scale.x = 0.5;
+        marker.scale.z = marker.scale.y = 0.05*exp(sample.weight);
+        marker.color.r = 1;
+        marker.color.a = 1;
     }
-
-    particles_msg.header.frame_id = map_frame_id_;
-    particles_msg.header.stamp = stamp;
+    for (uint i = samples.size(); i<old_msg_size_; ++i)
+    {
+        visualization_msgs::Marker& marker = particles_msg.markers[i];
+        marker.ns = std::to_string(i);
+        marker.action = marker.DELETE;
+    }
+    old_msg_size_ = samples.size();
 
     pub_particles_.publish(particles_msg);
 }

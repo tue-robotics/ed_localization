@@ -151,6 +151,8 @@ private:
 
     bool resample(const ed::WorldModel& world);
 
+    uint old_msg_size_;
+
     void publishParticles(const ros::Time& stamp);
 
     void updateMapOdom(const geo::Pose3D& odom_to_base_link);
