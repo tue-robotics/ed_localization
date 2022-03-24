@@ -18,27 +18,28 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 catkin_package(
-  INCLUDE_DIRS
+  INCLUDE_DIRS include
   LIBRARIES ed_localization_pf ed_localization_odom ed_localization_laser ed_localization_plugin ed_localization_tf_plugin
   CATKIN_DEPENDS ed geometry_msgs rgbd sensor_msgs tf2 tf2_geometry_msgs tf2_ros tue_msgs visualization_msgs
   DEPENDS
 )
 
 include_directories(
+  include
   SYSTEM
   ${catkin_INCLUDE_DIRS}
 )
 
 add_library(ed_localization_pf
   src/kdtree.cpp
-  src/kdtree.h
+  include/ed_localization/kdtree.h
   src/particle_filter.cpp
-  src/particle_filter.h
+  include/ed_localization/particle_filter.h
 )
 
 add_library(ed_localization_odom
   src/odom_model.cpp
-  src/odom_model.h
+  include/ed_localization/odom_model.h
 )
 target_link_libraries(ed_localization_odom ed_localization_pf)
 
@@ -48,11 +49,18 @@ add_library(ed_localization_laser
 )
 target_link_libraries(ed_localization_laser ed_localization_pf)
 
+add_library(ed_localization_plugin_base
+  src/localization_plugin_base.cpp
+  include/ed_localization/localization_plugin_base.h
+)
+target_link_libraries(ed_localization_plugin_base ed_localization_pf ed_localization_odom ${catkin_LIBRARIES})
+add_dependencies(ed_localization_plugin_base ${catkin_EXPORTED_TARGETS})
+
 add_library(ed_localization_plugin
   src/localization_plugin.cpp
   src/localization_plugin.h
 )
-target_link_libraries(ed_localization_plugin ed_localization_pf ed_localization_odom ed_localization_laser ${catkin_LIBRARIES})
+target_link_libraries(ed_localization_plugin ed_localization_plugin_base ed_localization_laser ${catkin_LIBRARIES})
 add_dependencies(ed_localization_plugin ${catkin_EXPORTED_TARGETS})
 
 add_library(ed_localization_rgbd
