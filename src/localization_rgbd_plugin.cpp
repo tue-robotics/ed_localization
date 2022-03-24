@@ -275,7 +275,7 @@ geo::Transform2 LocalizationRGBDPlugin::tryGetInitialPoseFromConfig(tue::Configu
         throw ConfigurationException(message);
     }
 
-    geo::Transform2d result(x, y, yaw);
+    geo::Transform2d result(x, y, yaw); // NOLINT(clang-analyzer-core.CallAndMessage)
     return result;
 }
 
