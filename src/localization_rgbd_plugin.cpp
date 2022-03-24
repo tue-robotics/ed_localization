@@ -303,15 +303,6 @@ void LocalizationRGBDPlugin::process(const ed::WorldModel& world, ed::UpdateRequ
     {
          update(img, world, req);
     }
-
-//    while(!scan_buffer_.empty())
-//    {
-//        TransformStatus status = update(scan_buffer_.front(), world, req);
-//        if (status == OK || status == TOO_OLD || status == UNKNOWN_ERROR)
-//            scan_buffer_.pop();
-//        else
-//            break;
-//    }
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -422,38 +413,6 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
 
     return OK;
 }
-
-// ----------------------------------------------------------------------------------------------------
-
-
-
-//TransformStatus LocalizationRGBDPlugin::initLaserOffset(const std::string& frame_id, const ros::Time& stamp)
-//{
-//    tf2::Stamped<tf2::Transform> p_laser;
-//    TransformStatus ts = transform(base_link_frame_id_, frame_id, stamp, p_laser);
-
-//    if (ts != OK)
-//        return ts;
-
-//    geo::Transform2 offset(geo::Mat2(p_laser.getBasis()[0][0], p_laser.getBasis()[0][1],
-//                                     p_laser.getBasis()[1][0], p_laser.getBasis()[1][1]),
-//                           geo::Vec2(p_laser.getOrigin().getX(), p_laser.getOrigin().getY()));
-
-//    bool upside_down = p_laser.getBasis()[2][2] < 0;
-//    if (upside_down)
-//    {
-//        offset.R.yx = -offset.R.yx;
-//        offset.R.yy = -offset.R.yy;
-//    }
-
-//    double laser_height = p_laser.getOrigin().getZ();
-
-//    rgbd_model_.setLaserOffset(offset, laser_height, upside_down);
-
-//    laser_offset_initialized_ = true;
-
-//    return OK;
-//}
 
 // ----------------------------------------------------------------------------------------------------
 

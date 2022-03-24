@@ -31,10 +31,6 @@
 #include <functional>
 #include <memory>
 
-//namespace cv {
-//    typedef std::shared_ptr<Mat> MatPtr;
-//    typedef std::shared_ptr<const Mat> MatConstPtr;
-//}
 
 namespace tf2 {
     class Transform;
@@ -132,8 +128,6 @@ private:
     geo::Transform2 tryGetInitialPoseFromConfig(tue::Configuration& config);
 
     // Init
-    TransformStatus CameraOffset(const std::string& frame_id, const ros::Time& stamp);
-
     void initParticleFilterUniform(const geo::Transform2& pose);
 
     // Callbacks
