@@ -1,6 +1,6 @@
 #include "rgbd_model.h"
 
-#include "particle_filter.h"
+#include "ed_localization/particle_filter.h"
 
 #include <ed/world_model.h>
 #include <ed/entity.h>
