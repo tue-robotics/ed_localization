@@ -7,7 +7,7 @@
   </library>
   <library path="lib/libed_localization_rgbd_plugin">
     <class name="ed_localization/localization_rgbd" type="LocalizationRGBDPlugin" base_class_type="ed::Plugin">
-      <description>Plugin to localize the robot with th use of RGBD images and AMCL.</description>
+      <description>Plugin to localize the robot with the use of RGBD images and AMCL.</description>
     </class>
   </library>
   <library path="lib/libed_localization_tf_plugin">
