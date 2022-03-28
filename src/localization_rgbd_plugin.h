@@ -62,10 +62,6 @@ protected:
      */
     ed_localization::TransformStatus update(const rgbd::ImageConstPtr& img, const ed::WorldModel& world, ed::UpdateRequest& req);
 
-    uint old_msg_size_;
-
-    void publishParticles(const ros::Time& stamp);
-
 };
 
 #endif

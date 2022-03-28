@@ -23,8 +23,6 @@
 
 #include <tue_msgs/GetMaskedImage.h>
 
-#include <visualization_msgs/MarkerArray.h>
-
 #include <future>
 #include <math.h>
 
@@ -34,8 +32,7 @@ using namespace ed_localization;
 
 LocalizationRGBDPlugin::LocalizationRGBDPlugin() :
     initial_pose_d_(0),
-    initial_pose_a_(0),
-    old_msg_size_(0)
+    initial_pose_a_(0)
 {
 }
 
@@ -190,43 +187,6 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     }
 
     return OK;
-}
-
-// ----------------------------------------------------------------------------------------------------
-
-void LocalizationRGBDPlugin::publishParticles(const ros::Time &stamp)
-{
-    ROS_DEBUG_NAMED("Localization", "Publishing particles");
-    const std::vector<Sample>& samples = particle_filter_.samples();
-    visualization_msgs::MarkerArray particles_msg;
-    particles_msg.markers.resize(std::max<uint>(old_msg_size_, samples.size()));
-    for(uint i = 0; i < samples.size(); ++i)
-    {
-        visualization_msgs::Marker& marker = particles_msg.markers[i];
-        const Sample& sample = samples[i];
-        marker.header.frame_id = map_frame_id_;
-        marker.header.stamp = stamp;
-
-        const geo::Transform2& p = sample.pose;
-        geo::convert(p.projectTo3d(), marker.pose);
-
-        marker.type = marker.ARROW;
-        marker.ns = std::to_string(i);
-        marker.action = marker.ADD;
-        marker.scale.x = 0.5;
-        marker.scale.z = marker.scale.y = 0.05*exp(sample.weight);
-        marker.color.r = 1;
-        marker.color.a = 1;
-    }
-    for (uint i = samples.size(); i<old_msg_size_; ++i)
-    {
-        visualization_msgs::Marker& marker = particles_msg.markers[i];
-        marker.ns = std::to_string(i);
-        marker.action = marker.DELETE;
-    }
-    old_msg_size_ = samples.size();
-
-    pub_particles_.publish(particles_msg);
 }
 
 // ----------------------------------------------------------------------------------------------------
