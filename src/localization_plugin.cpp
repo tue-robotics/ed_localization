@@ -118,7 +118,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         // Get displacement and project to 2D
         movement = (previous_odom_pose_.inverse() * odom_to_base_link).projectTo2d();
 
-        update = std::abs(movement.t.x) >= update_min_d_ || std::abs(movement.t.y) >= update_min_d_ || std::abs(movement.rotation()) >= update_min_a_;
+        update = movement.t.x*movement.t.x + movement.t.y*movement.t.y >= update_min_d_sq_ || std::abs(movement.rotation()) >= update_min_a_;
     }
 
     bool force_publication = false;

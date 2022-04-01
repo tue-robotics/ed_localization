@@ -31,7 +31,7 @@ namespace ed_localization {
 LocalizationPluginBase::LocalizationPluginBase() :
     resample_interval_(1),
     resample_count_(0),
-    update_min_d_(0),
+    update_min_d_sq_(0),
     update_min_a_(0),
     have_previous_odom_pose_(false),
     latest_map_odom_valid_(false),
@@ -78,7 +78,9 @@ void LocalizationPluginBase::configure(tue::Configuration config)
 
     config.value("resample_interval", resample_interval_);
 
-    config.value("update_min_d", update_min_d_);
+    double update_min_d;
+    config.value("update_min_d", update_min_d);
+    update_min_d_sq_ = update_min_d * update_min_d;
     config.value("update_min_a", update_min_a_);
 
     if (config.readGroup("odom_model", tue::config::REQUIRED))

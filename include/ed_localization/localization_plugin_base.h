@@ -115,7 +115,7 @@ protected:
     int resample_interval_;
     int resample_count_;
 
-    double update_min_d_;
+    double update_min_d_sq_;
     double update_min_a_;
 
     // PARTICLE FILTER
