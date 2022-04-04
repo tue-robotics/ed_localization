@@ -113,6 +113,16 @@ void LocalizationRGBDTestPlugin::configure(tue::Configuration config)
         sub_initial_pose_ = nh.subscribe(sub_opts);
     }
 
+    std::string particle_pose_topic;
+    if (config.value("particle_pose_topic", particle_pose_topic, tue::config::OPTIONAL))
+    {
+        // Subscribe to particle pose topic
+        ros::SubscribeOptions sub_opts =
+                ros::SubscribeOptions::create<geometry_msgs::PoseStamped>(
+                    particle_pose_topic, 1, boost::bind(&LocalizationRGBDTestPlugin::particlePoseCallBack, this, _1), ros::VoidPtr(), &cb_queue_);
+        sub_particle_pose_ = nh.subscribe(sub_opts);
+    }
+
     geo::Transform2d initial_pose = getInitialPose(nh, config);
 
     config.value("robot_name", robot_name_);
@@ -128,7 +138,6 @@ void LocalizationRGBDTestPlugin::initialize()
 
 void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
 {
-    initial_pose_msg_.reset();
     cb_queue_.callAvailable();
 
     if (initial_pose_msg_)
@@ -144,13 +153,18 @@ void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::Update
             geo::convert(odom_to_base_link_tf, odom_to_base_link);
             latest_map_odom_ = map_to_base_link * odom_to_base_link.inverse();
             latest_map_odom_valid_ = true;
+            initial_pose_msg_.reset();
         }
     }
 
-    rgbd::ImagePtr img = rgbd_client_.nextImage();
-    if (img)
+    if (particle_pose_msg_)
     {
-        update(img, world, req);
+        rgbd::ImagePtr img = rgbd_client_.nextImage();
+        if (img)
+        {
+            update(img, world, req);
+        }
+        particle_pose_msg_.reset();
     }
 }
 
@@ -158,14 +172,10 @@ void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::Update
 
 TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& img, const ed::WorldModel& world, ed::UpdateRequest& req)
 {
-    // Check if particle filter is initialized
-    if (particle_filter_.samples().empty())
-    {
-        ROS_ERROR_NAMED("Localization", "(update) Empty particle filter");
-        return UNKNOWN_ERROR;
-    }
-
     auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDTestPlugin::getMaskedImage, this, img);
+
+    geo::Pose3D particle_pose;
+    geo::convert(particle_pose_msg_->pose, particle_pose);
 
     // Get transformation from base_link to camera frame
     tf2::Stamped<tf2::Transform> camera_to_base_link_tf;
@@ -180,64 +190,11 @@ TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& im
     rotate180.R.setRPY(M_PI, 0, 0);
     camera_to_base_link = camera_to_base_link * rotate180;
 
-    // Calculate delta movement based on odom (fetched from TF)
-    geo::Pose3D odom_to_base_link;
-    geo::Transform2 movement;
-
-    tf2::Stamped<tf2::Transform> odom_to_base_link_tf;
-    ts = transform(odom_frame_id_, base_link_frame_id_, ros::Time(img->getTimestamp()), odom_to_base_link_tf);
-    if (ts != OK)
-        return ts;
-
-    geo::convert(odom_to_base_link_tf, odom_to_base_link);
-
-    bool update = false;
-    if (have_previous_odom_pose_)
-    {
-        // Get displacement and project to 2D
-        movement = (previous_odom_pose_.inverse() * odom_to_base_link).projectTo2d();
-
-        update = movement.t.x*movement.t.x + movement.t.y*movement.t.y >= update_min_d_sq_ || std::abs(movement.rotation()) >= update_min_a_;
-    }
-
-    bool force_publication = false;
-    if (!have_previous_odom_pose_)
-    {
-        previous_odom_pose_ = odom_to_base_link;
-        have_previous_odom_pose_ = true;
-        update = true;
-        force_publication = true;
-    }
-    else if (have_previous_odom_pose_ && update)
-    {
-        // Update motion
-        odom_model_.updatePoses(movement, particle_filter_);
-    }
-
-    bool resampled = false;
-    if (update)
-    {
-        ROS_DEBUG_NAMED("Localization", "Updating RGBD");
-        // Update sensor
-        bool success = rgbd_model_.updateWeights(world, masked_image_future, camera_to_base_link, particle_filter_);
-        if (!success)
-            return UNKNOWN_ERROR;
-
-        previous_odom_pose_ = odom_to_base_link;
-        have_previous_odom_pose_ = true;
-
-        // (Re)sample
-        resampled = resample(world);
-
-        // Publish particles
-        publishParticles(ros::Time(img->getTimestamp()));
-    }
-
-    // Update map-odom
-    if(resampled || force_publication)
-    {
-        updateMapOdom(odom_to_base_link);
-    }
+    ROS_DEBUG_NAMED("Localization", "Updating RGBD");
+    // Update sensor
+    bool success = rgbd_model_.updateWeights(world, masked_image_future, camera_to_base_link, particle_filter_);
+    if (!success)
+        return UNKNOWN_ERROR;
 
     // Publish result
     if (latest_map_odom_valid_)
@@ -246,7 +203,7 @@ TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& im
 
         // This should be executed allways. map_odom * odom_base_link
         if (!robot_name_.empty())
-            req.setPose(robot_name_, latest_map_odom_ * previous_odom_pose_);
+            req.setPose(robot_name_, particle_pose);
     }
 
     return OK;
@@ -272,6 +229,13 @@ const MaskedImageConstPtr LocalizationRGBDTestPlugin::getMaskedImage(const rgbd:
     masked_image->labels = std::move(srv_resp.output_image.labels);
 
     return masked_image;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void LocalizationRGBDTestPlugin::particlePoseCallBack(const geometry_msgs::PoseStampedConstPtr& msg)
+{
+    particle_pose_msg_ = msg;
 }
 
 // ----------------------------------------------------------------------------------------------------

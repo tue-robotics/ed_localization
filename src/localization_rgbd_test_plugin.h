@@ -7,6 +7,10 @@
 
 // ROS
 #include <ros/service_client.h>
+#include <ros/subscriber.h>
+
+#include <geometry_msgs/PoseStamped.h>
+
 // RGBD
 #include <rgbd/client.h>
 #include <rgbd/types.h>
@@ -42,14 +46,21 @@ protected:
     double initial_pose_d_;
     double initial_pose_a_;
 
+    // Particle pose
+    geometry_msgs::PoseStampedConstPtr particle_pose_msg_;
+
     // MODELS
     RGBDModel rgbd_model_;
 
     // ROS
     ros::ServiceClient masked_image_srv_client_;
     rgbd::Client rgbd_client_;
+    ros::Subscriber sub_particle_pose_;
 
     const MaskedImageConstPtr getMaskedImage(const rgbd::ImageConstPtr& img);
+
+    // Callbacks
+    void particlePoseCallBack(const geometry_msgs::PoseStampedConstPtr& msg);
 
     /**
      * @brief
