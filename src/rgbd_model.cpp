@@ -431,7 +431,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     int total_pixels = size_.area();
     if (num_pixels_ == 0)
         num_pixels_ = total_pixels;
-    uint pixel_step = std::max(total_pixels/num_pixels_, 1);
+    uint pixel_step = std::max(total_pixels/num_pixels_, 1); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
     for (uint sample_i = 0; sample_i < unique_samples.size(); ++sample_i)
     {
         const cv::Mat& depth_image = depth_images[sample_i];
