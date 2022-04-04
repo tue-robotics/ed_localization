@@ -37,21 +37,12 @@ public:
 
     bool updateWeights(const ed::WorldModel& world, std::future<const MaskedImageConstPtr>& masked_image_future, const geo::Pose3D& cam_to_baselink, ParticleFilter& pf);
 
-    const std::vector<geo::Vec2>& lines_start() const { return lines_start_; }
-    const std::vector<geo::Vec2>& lines_end() const { return lines_end_; }
-
-    const std::vector<double>& sensor_ranges() const { return sensor_ranges_; }
+    double getParticleProp(const cv::Mat& depth_image, const cv::Mat& type_image, const cv::Mat& sensor_depth_image, const cv::Mat& sensor_type_image, const std::vector<std::string>& sensor_labels);
 
 private:
 
     std::vector<std::string> labels_;
 
-    double z_hit;
-    double sigma_hit;
-    double z_short;
-    double z_max;
-    double z_rand;
-    double lambda_short;
     double range_max;
 
     int num_pixels_;
@@ -66,11 +57,6 @@ private:
     // RENDERING
     geo::DepthCamera cam_;
     cv::Size size_;
-
-    // Visualization
-    std::vector<geo::Vec2> lines_start_;
-    std::vector<geo::Vec2> lines_end_;
-    std::vector<double> sensor_ranges_;
 
 };
 
