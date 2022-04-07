@@ -1,5 +1,5 @@
-#ifndef ED_LOCALIZATION_LASER_MODEL_H_
-#define ED_LOCALIZATION_LASER_MODEL_H_
+#ifndef ED_LOCALIZATION_RGBD_MODEL_H_
+#define ED_LOCALIZATION_RGBD_MODEL_H_
 
 #include <ed/types.h>
 #include <geolib/sensors/DepthCamera.h>
@@ -51,10 +51,6 @@ private:
 
     double min_particle_distance_sq_;
     double min_particle_rotation_distance_;
-
-    // CACHING
-    std::vector<double> exp_hit_;
-    std::vector<double> exp_short_;
 
     // RENDERING
     geo::DepthCamera cam_;
