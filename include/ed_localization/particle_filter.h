@@ -9,6 +9,8 @@
 
 #include <vector>
 
+namespace ed_localization {
+
 // ----------------------------------------------------------------------------------------------------
 
 struct Sample
@@ -110,5 +112,7 @@ private:
     void setUniformWeights();
 
 };
+
+}
 
 #endif

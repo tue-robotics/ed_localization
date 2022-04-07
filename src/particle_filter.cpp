@@ -5,6 +5,8 @@
 
 #include <ros/console.h>
 
+namespace ed_localization {
+
 // ----------------------------------------------------------------------------------------------------
 
 ParticleFilter::ParticleFilter() :
@@ -56,7 +58,7 @@ void ParticleFilter::configure(tue::Configuration config)
     limit_cache_.clear();
     limit_cache_.resize(max_samples_, 0);
 
-    kd_tree_.reset(new KDTree(max_samples_, cell_size));
+    kd_tree_ = std::make_unique<ed_localization::KDTree>(max_samples_, cell_size);
 
     ROS_INFO_STREAM_NAMED("Localization", "min_samples: " << min_samples_ << ", max_samples: " << max_samples_ << std::endl
                           << "kld_err: " << kld_err_ << ", kld_z: " << kld_z_ << std::endl
@@ -405,3 +407,4 @@ void ParticleFilter::setUniformWeights()
         it->weight = uni_weight;
 }
 
+}

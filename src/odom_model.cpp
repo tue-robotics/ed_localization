@@ -22,6 +22,8 @@ double generateRandomGaussian(double sigma)
     return(sigma * x2 * sqrt(-2.0*log(w)/w));
 }
 
+namespace ed_localization {
+
 // ----------------------------------------------------------------------------------------------------
 
 OdomModel::OdomModel() : alpha1_(0.2), alpha2_(0.2), alpha3_(0.2), alpha4_(0.2), alpha5_(0.2)
@@ -74,4 +76,6 @@ void OdomModel::updatePoses(const geo::Transform2& movement, ParticleFilter& pf)
 
         sample.pose = sample.pose * movement * noise;
     }
+}
+
 }

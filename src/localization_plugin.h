@@ -40,7 +40,7 @@ protected:
     bool visualize_;
 
     // MODELS
-    LaserModel laser_model_;
+    ed_localization::LaserModel laser_model_;
 
     // State
     bool laser_offset_initialized_;

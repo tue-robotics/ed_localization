@@ -7,6 +7,8 @@
 
 #include <geolib/math_types.h>
 
+namespace ed_localization {
+
 struct KDTreeNode
 {
     KDTreeNode() : depth(0), leaf(true), pivot_dim(0), pivot_value(0), key({0,0,0}), value(0), cluster(-1), children({nullptr, nullptr})
@@ -137,5 +139,7 @@ private:
     // The number of leaf nodes in the tree
     unsigned int leaf_count_;
 };
+
+}
 
 #endif // ED_LOCALIZATION_KDTREE_H_

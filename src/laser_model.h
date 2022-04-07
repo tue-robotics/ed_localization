@@ -10,6 +10,8 @@
 
 #include <vector>
 
+namespace ed_localization {
+
 class ParticleFilter;
 
 class LaserModel
@@ -72,5 +74,7 @@ private:
     std::vector<double> sensor_ranges_;
 
 };
+
+}
 
 #endif

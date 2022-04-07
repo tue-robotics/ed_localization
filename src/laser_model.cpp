@@ -7,6 +7,8 @@
 
 #include <tue/profiling/timer.h>
 
+namespace ed_localization {
+
 // ----------------------------------------------------------------------------------------------------
 
 class LineRenderResult : public geo::LaserRangeFinder::RenderResult
@@ -351,4 +353,4 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     pf.normalize(true);
 }
 
-
+}

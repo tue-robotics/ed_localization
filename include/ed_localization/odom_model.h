@@ -7,6 +7,8 @@
 
 #include <tue/config/configuration.h>
 
+namespace ed_localization {
+
 class OdomModel
 {
 
@@ -29,5 +31,7 @@ private:
     double alpha5_;
 
 };
+
+}
 
 #endif

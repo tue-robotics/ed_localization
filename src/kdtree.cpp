@@ -2,10 +2,9 @@
 
 #include <cmath>
 
-#include <ros/console.h>
+namespace ed_localization {
 
 // ----------------------------------------------------------------------------------------------------
-
 
 KDTree::KDTree(unsigned int initial_size, const std::array<double, 3>& cell_size) : res_(cell_size), root_(nullptr), node_count_(0), nodes_(initial_size), leaf_count_(0)
 {
@@ -237,4 +236,6 @@ void KDTree::clusterNode(const KDTreeNode* node, int depth)
         nnode->cluster = node->cluster;
         clusterNode(nnode, depth + 1);
     }
+}
+
 }
