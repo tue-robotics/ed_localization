@@ -68,7 +68,7 @@ add_library(ed_localization_rgbd
   src/rgbd_model.cpp
   src/rgbd_model.h
 )
-target_link_libraries(ed_localization_rgbd ed_localization_pf)
+target_link_libraries(ed_localization_rgbd ed_localization_pf ${catkin_LIBRARIES})
 
 add_library(ed_localization_rgbd_plugin
   src/localization_rgbd_plugin.cpp
