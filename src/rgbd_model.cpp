@@ -22,6 +22,8 @@
 #include <opencv2/imgproc/imgproc.hpp>
 
 
+namespace ed_localization {
+
 // ----------------------------------------------------------------------------------------------------
 
 class SampleRenderResult : public geo::RenderResult

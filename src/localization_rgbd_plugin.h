@@ -45,13 +45,13 @@ protected:
     double initial_pose_a_;
 
     // MODELS
-    RGBDModel rgbd_model_;
+    ed_localization::RGBDModel rgbd_model_;
 
     // ROS
     ros::ServiceClient masked_image_srv_client_;
     rgbd::Client rgbd_client_;
 
-    const MaskedImageConstPtr getMaskedImage(const rgbd::ImageConstPtr& img);
+    const ed_localization::MaskedImageConstPtr getMaskedImage(const rgbd::ImageConstPtr& img);
 
     /**
      * @brief

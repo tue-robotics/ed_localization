@@ -13,6 +13,8 @@
 
 #include <future>
 
+namespace ed_localization {
+
 class ParticleFilter;
 
 struct MaskedImage {
@@ -59,5 +61,7 @@ private:
     cv::Size size_;
 
 };
+
+}
 
 #endif
