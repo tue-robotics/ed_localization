@@ -74,6 +74,8 @@ void KDTree::cluster()
 
 int KDTree::getCluster(const geo::Transform2& pose)
 {
+    if (!root_)
+        return -1;
     KDTreeNode* node = findNode(root_, generateKey(pose));
     if (!node)
         return -1;
@@ -84,6 +86,8 @@ int KDTree::getCluster(const geo::Transform2& pose)
 
 double KDTree::getValue(const geo::Transform2& pose)
 {
+    if (!root_)
+        return 0;
     KDTreeNode* node = findNode(root_, generateKey(pose));
     if (!node)
         return 0;
