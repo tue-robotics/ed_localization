@@ -36,18 +36,19 @@ add_library(ed_localization_pf
   src/particle_filter.cpp
   include/ed_localization/particle_filter.h
 )
+target_link_libraries(ed_localization_pf ${catkin_LIBRARIES})
 
 add_library(ed_localization_odom
   src/odom_model.cpp
   include/ed_localization/odom_model.h
 )
-target_link_libraries(ed_localization_odom ed_localization_pf)
+target_link_libraries(ed_localization_odom ed_localization_pf ${catkin_LIBRARIES})
 
 add_library(ed_localization_laser
   src/laser_model.cpp
   src/laser_model.h
 )
-target_link_libraries(ed_localization_laser ed_localization_pf)
+target_link_libraries(ed_localization_laser ed_localization_pf ${catkin_LIBRARIES})
 
 add_library(ed_localization_plugin_base
   src/localization_plugin_base.cpp
