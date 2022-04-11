@@ -105,17 +105,17 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDPlugin::getMaskedImage, this, img);
 
     // Get transformation from base_link to camera frame
-    tf2::Stamped<tf2::Transform> camera_to_base_link_tf;
-    TransformStatus ts = transform(base_link_frame_id_, img->getFrameId(), ros::Time(img->getTimestamp()), camera_to_base_link_tf);
+    tf2::Stamped<tf2::Transform> base_link_to_camera_tf;
+    TransformStatus ts = transform(base_link_frame_id_, img->getFrameId(), ros::Time(img->getTimestamp()), base_link_to_camera_tf);
     if (ts != OK)
         return ts;
 
-    geo::Pose3D camera_to_base_link;
-    geo::convert(camera_to_base_link_tf, camera_to_base_link);
+    geo::Pose3D base_link_to_camera;
+    geo::convert(base_link_to_camera_tf, base_link_to_camera);
 
     geo::Pose3D rotate180 = geo::Pose3D::identity();
     rotate180.R.setRPY(M_PI, 0, 0);
-    camera_to_base_link = camera_to_base_link * rotate180;
+    base_link_to_camera = base_link_to_camera * rotate180;
 
     // Calculate delta movement based on odom (fetched from TF)
     geo::Pose3D odom_to_base_link;
@@ -156,7 +156,7 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     {
         ROS_DEBUG_NAMED("Localization", "Updating RGBD");
         // Update sensor
-        bool success = rgbd_model_.updateWeights(world, masked_image_future, camera_to_base_link, particle_filter_);
+        bool success = rgbd_model_.updateWeights(world, masked_image_future, base_link_to_camera, particle_filter_);
         if (!success)
             return UNKNOWN_ERROR;
 
