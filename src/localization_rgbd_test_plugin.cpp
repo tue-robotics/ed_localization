@@ -150,7 +150,7 @@ void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::Update
         geo::Pose3D map_to_base_link;
         geo::convert(initial_pose_msg_->pose.pose, map_to_base_link);
         tf2::Stamped<tf2::Transform> odom_to_base_link_tf;
-        TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, initial_pose_msg_->header.stamp, odom_to_base_link_tf);
+        TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, ros::Time(0), odom_to_base_link_tf);
         if (ts == OK)
         {
             geo::Pose3D odom_to_base_link;
@@ -170,45 +170,84 @@ void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::Update
         }
         particle_pose_msg_.reset();
     }
+    if (latest_map_odom_valid_)
+    {
+        publishMapOdom(ros::Time::now());
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------
 
 TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& img, const ed::WorldModel& world, ed::UpdateRequest& req)
 {
+    ROS_DEBUG_NAMED("localization", "Updating RGBD");
     auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDTestPlugin::getMaskedImage, this, img);
 
     geo::Pose3D particle_pose;
-    geo::convert(particle_pose_msg_->pose, particle_pose);
+//    tf2::Stamped<tf2::Transform> particle_pose_tf;
+//    TransformStatus ts = transform(base_link_frame_id_, map_frame_id_, ros::Time(img->getTimestamp()), particle_pose_tf);
+//    if (ts != OK)
+//    {
+//        ROS_ERROR_STREAM_NAMED("localization", "Could not transform to global frame: " << map_frame_id_ << ", from: " << base_link_frame_id_);
+//        return ts;
+//    }
+//    geo::convert(particle_pose_tf, particle_pose);
+    geo::convert(particle_pose_msg_->pose, particle_pose); // Assuming the msg is in map frame
 
     // Get transformation from base_link to camera frame
-    tf2::Stamped<tf2::Transform> camera_to_base_link_tf;
-    TransformStatus ts = transform(base_link_frame_id_, img->getFrameId(), ros::Time(img->getTimestamp()), camera_to_base_link_tf);
+    tf2::Stamped<tf2::Transform> base_link_to_camera_tf;
+    TransformStatus ts = transform(base_link_frame_id_, img->getFrameId(), ros::Time(img->getTimestamp()), base_link_to_camera_tf);
     if (ts != OK)
+    {
+        ROS_ERROR("NOT OK");
         return ts;
+    }
 
-    geo::Pose3D camera_to_base_link;
-    geo::convert(camera_to_base_link_tf, camera_to_base_link);
+    geo::Pose3D base_link_to_camera;
+    geo::convert(base_link_to_camera_tf, base_link_to_camera);
 
     geo::Pose3D rotate180 = geo::Pose3D::identity();
     rotate180.R.setRPY(M_PI, 0, 0);
-    camera_to_base_link = camera_to_base_link * rotate180;
+    base_link_to_camera = base_link_to_camera * rotate180;
 
-    ROS_DEBUG_NAMED("Localization", "Updating RGBD");
-    // Update sensor
-    bool success = rgbd_model_.updateWeights(world, masked_image_future, camera_to_base_link, particle_filter_);
-    if (!success)
-        return UNKNOWN_ERROR;
+    // Variables
+    cv::Mat depth_image;
+    cv::Mat type_image;
+    std::vector<std::string> labels;
 
-    // Publish result
-    if (latest_map_odom_valid_)
+    const MaskedImageConstPtr masked_image = masked_image_future.get();
+    if (!masked_image)
     {
-        publishMapOdom(ros::Time(img->getTimestamp()));
-
-        // This should be executed allways. map_odom * odom_base_link
-        if (!robot_name_.empty())
-            req.setPose(robot_name_, particle_pose);
+        ROS_ERROR_NAMED("localization", "Could not get masked image");
+        return UNKNOWN_ERROR;
     }
+
+    bool success = rgbd_model_.generateWMImage(world, masked_image, (particle_pose * base_link_to_camera).inverse(), depth_image, type_image, labels);
+    if (!success)
+    {
+        ROS_ERROR_NAMED("localization", "Could not render WM images");
+        return UNKNOWN_ERROR;
+    }
+
+    double prob = rgbd_model_.getParticleProp(depth_image, type_image, masked_image->rgbd_image->getDepthImage(), masked_image->mask->image, masked_image->labels);
+
+    cv::Size size = masked_image->rgbd_image->getRGBImage().size();
+
+    cv::Mat canvas = cv::Mat(size.height, size.width * 2, CV_8UC1, UINT8_MAX);
+
+    cv::Mat sensor_roi = canvas(cv::Rect(cv::Point(0, 0), size));
+    cv::Mat wm_roi = canvas(cv::Rect(cv::Point(size.width, 0), size));
+
+    cv::resize(30*masked_image->mask->image, sensor_roi, size);
+    cv::resize(30*type_image, wm_roi, size);
+
+    cv::putText(canvas, std::to_string(prob), cv::Point(10, 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(255, 255, 255), 1);
+
+    cv::namedWindow("type_image");
+    cv::imshow("type_image", canvas);
+    cv::waitKey(1);
+
+    ROS_ERROR_STREAM_NAMED("localization", "Pose: " << particle_pose << std::endl << "resulted in " << prob);
 
     return OK;
 }

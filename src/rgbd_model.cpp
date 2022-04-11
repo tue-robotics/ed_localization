@@ -144,7 +144,7 @@ void RGBDModel::configure(tue::Configuration config)
 
 // ----------------------------------------------------------------------------------------------------
 
-bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const MaskedImageConstPtr>& masked_image_future, const geo::Pose3D& cam_to_baselink, ParticleFilter& pf)
+bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const MaskedImageConstPtr>& masked_image_future, const geo::Pose3D& base_link_to_cam, ParticleFilter& pf)
 {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Find unique samples
@@ -212,7 +212,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
          masked_image = masked_image_future.get();
          if (!masked_image)
          {
-             ROS_ERROR("(RGBD) Could not get masked image");
+             ROS_ERROR("(RGBD) Could not get masked image1");
              return false;
          }
          cam_ = geo::DepthCamera(masked_image->rgbd_image->getCameraModel());
@@ -233,7 +233,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
         depth_image = cv::Mat(size_, CV_32FC1, 0.0);
         type_image = cv::Mat(size_, CV_8UC1, UINT8_MAX);
 
-        const geo::Pose3D cam_pose = sample.projectTo3d() * cam_to_baselink;
+        const geo::Pose3D cam_pose = sample.projectTo3d() * base_link_to_cam;
 
         bool success = generateWMImages(world, cam_, cam_pose.inverse(), depth_image, type_image, labels_);
     }
@@ -244,7 +244,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
         masked_image = masked_image_future.get();
         if (!masked_image)
         {
-            ROS_ERROR("(RGBD) Could not get masked image");
+            ROS_ERROR("(RGBD) Could not get masked image2");
             return false;
         }
     }
@@ -255,30 +255,37 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
 
     std::vector<double> weight_updates(unique_samples.size(), 0.);
 
-    int total_pixels = size_.area();
-    if (num_pixels_ == 0)
-        num_pixels_ = total_pixels;
-    uint pixel_step = std::max(total_pixels/num_pixels_, 1); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
     for (uint sample_i = 0; sample_i < unique_samples.size(); ++sample_i)
     {
         const cv::Mat& depth_image = depth_images[sample_i];
         const cv::Mat& type_image = type_images[sample_i];
-
-        double& p = weight_updates[sample_i];
-        for (uint i = 0; i<total_pixels; i+=pixel_step)
-        {
-            uchar sensor_label_index = sensor_type_image.at<uchar>(i);
-            uchar label_index = type_image.at<uchar>(i);
-            if (sensor_label_index == UINT8_MAX || label_index == UINT8_MAX)
-                continue; // Skip pixels that are not labeled
-            if (sensor_labels[sensor_label_index] == labels_[label_index])
-            {
-//                ROS_WARN_STREAM("Sensor label: " << sensor_labels[sensor_label_index] << std::endl << "Sampel label: " << labels_[label_index]);
-                ++p;
-            }
-        }
-        p /= num_pixels_;
+        weight_updates[sample_i] = getParticleProp(depth_image, type_image, sensor_depth_image, sensor_type_image, sensor_labels);
     }
+
+//    int total_pixels = size_.area();
+//    if (num_pixels_ == 0)
+//        num_pixels_ = total_pixels;
+//    uint pixel_step = std::max(total_pixels/num_pixels_, 1); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+//    for (uint sample_i = 0; sample_i < unique_samples.size(); ++sample_i)
+//    {
+//        const cv::Mat& depth_image = depth_images[sample_i];
+//        const cv::Mat& type_image = type_images[sample_i];
+
+//        double& p = weight_updates[sample_i];
+//        for (uint i = 0; i<total_pixels; i+=pixel_step)
+//        {
+//            uchar sensor_label_index = sensor_type_image.at<uchar>(i);
+//            uchar label_index = type_image.at<uchar>(i);
+//            if (sensor_label_index == UINT8_MAX || label_index == UINT8_MAX)
+//                continue; // Skip pixels that are not labeled
+//            if (sensor_labels[sensor_label_index] == labels_[label_index])
+//            {
+////                ROS_WARN_STREAM("Sensor label: " << sensor_labels[sensor_label_index] << std::endl << "Sampel label: " << labels_[label_index]);
+//                ++p;
+//            }
+//        }
+//        p /= num_pixels_;
+//    }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Update the particle filter
@@ -300,4 +307,65 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     pf.normalize(true);
 
     return true;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+bool RGBDModel::generateWMImage(const ed::WorldModel& world, const MaskedImageConstPtr& masked_image, const geo::Pose3D& cam_pose_inv, cv::Mat& depth_image, cv::Mat& type_image, std::vector<std::string>& labels)
+{
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Render world model type/depth image
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    if (!cam_.initialized())
+    {
+         if (!masked_image)
+         {
+             ROS_ERROR("(RGBD) Empty masked image");
+             return false;
+         }
+         cam_ = geo::DepthCamera(masked_image->rgbd_image->getCameraModel());
+         size_ = masked_image->rgbd_image->getRGBImage().size();
+    }
+
+    depth_image = cv::Mat(size_, CV_32FC1, 0.0);
+    type_image = cv::Mat(size_, CV_8UC1, UINT8_MAX);
+
+    bool success = generateWMImages(world, cam_, cam_pose_inv, depth_image, type_image, labels_);
+
+    ROS_ERROR_STREAM("Number of labels: " << labels_.size());
+
+    labels = labels_;
+
+    return success;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& type_image, const cv::Mat& sensor_depth_image, const cv::Mat& sensor_type_image, const std::vector<std::string>& sensor_labels)
+{
+    double p = 0.;
+
+    int total_pixels = size_.area();
+    if (num_pixels_ == 0)
+        num_pixels_ = total_pixels;
+    uint pixel_step = std::max(total_pixels/num_pixels_, 1); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+    for (uint i = 0; i<total_pixels; i+=pixel_step)
+    {
+        uchar sensor_label_index = sensor_type_image.at<uchar>(i);
+        uchar label_index = type_image.at<uchar>(i);
+        if (sensor_label_index == UINT8_MAX || label_index == UINT8_MAX)
+            continue; // Skip pixels that are not labeled
+        if (sensor_labels[sensor_label_index] == labels_[label_index])
+        {
+            ++p;
+        }
+    }
+
+    p /= num_pixels_;
+
+    return p;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
 }

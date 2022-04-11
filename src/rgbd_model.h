@@ -37,7 +37,9 @@ public:
 
     void configure(tue::Configuration config);
 
-    bool updateWeights(const ed::WorldModel& world, std::future<const MaskedImageConstPtr>& masked_image_future, const geo::Pose3D& cam_to_baselink, ParticleFilter& pf);
+    bool updateWeights(const ed::WorldModel& world, std::future<const MaskedImageConstPtr>& masked_image_future, const geo::Pose3D& base_link_to_cam, ParticleFilter& pf);
+
+    bool generateWMImage(const ed::WorldModel& world, const MaskedImageConstPtr& masked_image_future, const geo::Pose3D& cam_pose_inv, cv::Mat& depth_image, cv::Mat& type_image, std::vector<std::string>& labels);
 
     double getParticleProp(const cv::Mat& depth_image, const cv::Mat& type_image, const cv::Mat& sensor_depth_image, const cv::Mat& sensor_type_image, const std::vector<std::string>& sensor_labels);
 
