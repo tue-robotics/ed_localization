@@ -16,7 +16,6 @@
 
 #include <std_msgs/Header.h>
 
-#include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <geolib/ros/msg_conversions.h>
@@ -149,12 +148,12 @@ void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::Update
         // Set initial pose
         geo::Pose3D map_to_base_link;
         geo::convert(initial_pose_msg_->pose.pose, map_to_base_link);
-        tf2::Stamped<tf2::Transform> odom_to_base_link_tf;
+        geometry_msgs::TransformStamped odom_to_base_link_tf;
         TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, ros::Time(0), odom_to_base_link_tf);
         if (ts == OK)
         {
             geo::Pose3D odom_to_base_link;
-            geo::convert(odom_to_base_link_tf, odom_to_base_link);
+            geo::convert(odom_to_base_link_tf.transform, odom_to_base_link);
             latest_map_odom_ = map_to_base_link * odom_to_base_link.inverse();
             latest_map_odom_valid_ = true;
             initial_pose_msg_.reset();
@@ -184,18 +183,18 @@ TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& im
     auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDTestPlugin::getMaskedImage, this, img);
 
     geo::Pose3D particle_pose;
-//    tf2::Stamped<tf2::Transform> particle_pose_tf;
+//    geometry_msgs::TransformStamped particle_pose_tf;
 //    TransformStatus ts = transform(base_link_frame_id_, map_frame_id_, ros::Time(img->getTimestamp()), particle_pose_tf);
 //    if (ts != OK)
 //    {
 //        ROS_ERROR_STREAM_NAMED("localization", "Could not transform to global frame: " << map_frame_id_ << ", from: " << base_link_frame_id_);
 //        return ts;
 //    }
-//    geo::convert(particle_pose_tf, particle_pose);
+//    geo::convert(particle_pose_tf.transform, particle_pose);
     geo::convert(particle_pose_msg_->pose, particle_pose); // Assuming the msg is in map frame
 
     // Get transformation from base_link to camera frame
-    tf2::Stamped<tf2::Transform> base_link_to_camera_tf;
+    geometry_msgs::TransformStamped base_link_to_camera_tf;
     TransformStatus ts = transform(base_link_frame_id_, img->getFrameId(), ros::Time(img->getTimestamp()), base_link_to_camera_tf);
     if (ts != OK)
     {
@@ -204,7 +203,7 @@ TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& im
     }
 
     geo::Pose3D base_link_to_camera;
-    geo::convert(base_link_to_camera_tf, base_link_to_camera);
+    geo::convert(base_link_to_camera_tf.transform, base_link_to_camera);
 
     geo::Pose3D rotate180 = geo::Pose3D::identity();
     rotate180.R.setRPY(M_PI, 0, 0);

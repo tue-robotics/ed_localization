@@ -12,9 +12,6 @@
 #include <rgbd/client.h>
 #include <rgbd/types.h>
 
-// TF2
-#include <tf2/transform_datatypes.h>
-
 // MODELS
 #include "ed_localization/particle_filter.h"
 #include "ed_localization/odom_model.h"

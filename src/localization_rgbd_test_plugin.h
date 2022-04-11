@@ -16,7 +16,6 @@
 #include <rgbd/types.h>
 
 // TF2
-#include <tf2/transform_datatypes.h>
 #include <tf2_ros/buffer.h>
 
 // MODELS

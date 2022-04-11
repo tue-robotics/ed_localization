@@ -14,10 +14,7 @@
 
 #include <std_msgs/Header.h>
 
-#include <tf2/transform_datatypes.h>
-
 #include <geolib/ros/msg_conversions.h>
-#include <geolib/ros/tf2_conversions.h>
 
 #include <rgbd/ros/conversions.h>
 
@@ -105,13 +102,13 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDPlugin::getMaskedImage, this, img);
 
     // Get transformation from base_link to camera frame
-    tf2::Stamped<tf2::Transform> base_link_to_camera_tf;
+    geometry_msgs::TransformStamped base_link_to_camera_tf;
     TransformStatus ts = transform(base_link_frame_id_, img->getFrameId(), ros::Time(img->getTimestamp()), base_link_to_camera_tf);
     if (ts != OK)
         return ts;
 
     geo::Pose3D base_link_to_camera;
-    geo::convert(base_link_to_camera_tf, base_link_to_camera);
+    geo::convert(base_link_to_camera_tf.transform, base_link_to_camera);
 
     geo::Pose3D rotate180 = geo::Pose3D::identity();
     rotate180.R.setRPY(M_PI, 0, 0);
@@ -121,12 +118,12 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     geo::Pose3D odom_to_base_link;
     geo::Transform2 movement;
 
-    tf2::Stamped<tf2::Transform> odom_to_base_link_tf;
+    geometry_msgs::TransformStamped odom_to_base_link_tf;
     ts = transform(odom_frame_id_, base_link_frame_id_, ros::Time(img->getTimestamp()), odom_to_base_link_tf);
     if (ts != OK)
         return ts;
 
-    geo::convert(odom_to_base_link_tf, odom_to_base_link);
+    geo::convert(odom_to_base_link_tf.transform, odom_to_base_link);
 
     bool update = false;
     if (have_previous_odom_pose_)
