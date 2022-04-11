@@ -8,6 +8,7 @@
 
 #include <opencv2/highgui/highgui.hpp>
 
+#include <tf2/transform_datatypes.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
@@ -368,12 +369,11 @@ void LocalizationPluginBase::publishMapOdom(const ros::Time &stamp)
 // ----------------------------------------------------------------------------------------------------
 
 TransformStatus LocalizationPluginBase::transform(const std::string& target_frame, const std::string& source_frame,
-                                              const ros::Time& time, tf2::Stamped<tf2::Transform>& transform)
+                                              const ros::Time& time, geometry_msgs::TransformStamped& transform)
 {
     try
     {
-        geometry_msgs::TransformStamped ts = tf_buffer_.lookupTransform(target_frame, source_frame, time);
-        tf2::convert(ts, transform);
+        transform = tf_buffer_.lookupTransform(target_frame, source_frame, time);
         return OK;
     }
     catch (const tf2::ExtrapolationException& ex)
@@ -382,9 +382,9 @@ TransformStatus LocalizationPluginBase::transform(const std::string& target_fram
         {
             // Now we have to check if the error was an interpolation or extrapolation error
             // (i.e., the scan is too old or too new, respectively)
-            geometry_msgs::TransformStamped latest_transform = tf_buffer_.lookupTransform(target_frame, source_frame, ros::Time(0));
+            transform = tf_buffer_.lookupTransform(target_frame, source_frame, ros::Time(0));
 
-            if (time > latest_transform.header.stamp)
+            if (time > transform.header.stamp)
             {
                 // Scan is too new
                 return TOO_RECENT;

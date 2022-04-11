@@ -6,13 +6,10 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
-#include "tf2/transform_datatypes.h"
-
 #include <ed/update_request.h>
 #include <ed/world_model.h>
 
 #include <geolib/ros/msg_conversions.h>
-#include <geolib/ros/tf2_conversions.h>
 
 
 using namespace ed_localization;
@@ -105,12 +102,12 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     geo::Pose3D odom_to_base_link;
     geo::Transform2 movement;
 
-    tf2::Stamped<tf2::Transform> odom_to_base_link_tf;
+    geometry_msgs::TransformStamped odom_to_base_link_tf;
     TransformStatus ts = transform(odom_frame_id_, base_link_frame_id_, scan->header.stamp, odom_to_base_link_tf);
     if (ts != OK)
         return ts;
 
-    geo::convert(odom_to_base_link_tf, odom_to_base_link);
+    geo::convert(odom_to_base_link_tf.transform, odom_to_base_link);
 
     bool update = false;
     if (have_previous_odom_pose_)
@@ -186,24 +183,25 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
 
 TransformStatus LocalizationPlugin::initLaserOffset(const std::string& frame_id, const ros::Time& stamp)
 {
-    tf2::Stamped<tf2::Transform> p_laser;
+    geometry_msgs::TransformStamped p_laser;
     TransformStatus ts = transform(base_link_frame_id_, frame_id, stamp, p_laser);
 
     if (ts != OK)
         return ts;
 
-    geo::Transform2 offset(geo::Mat2(p_laser.getBasis()[0][0], p_laser.getBasis()[0][1],
-                                     p_laser.getBasis()[1][0], p_laser.getBasis()[1][1]),
-                           geo::Vec2(p_laser.getOrigin().getX(), p_laser.getOrigin().getY()));
+    geo::Pose3D offset_3d;
+    geo::convert(p_laser.transform, offset_3d);
 
-    bool upside_down = p_laser.getBasis()[2][2] < 0;
+    geo::Transform2 offset = offset_3d.projectTo2d();
+
+    bool upside_down = offset_3d.getBasis().zz < 0;
     if (upside_down)
     {
         offset.R.yx = -offset.R.yx;
         offset.R.yy = -offset.R.yy;
     }
 
-    double laser_height = p_laser.getOrigin().getZ();
+    double laser_height = offset_3d.getOrigin().getZ();
 
     laser_model_.setLaserOffset(offset, laser_height, upside_down);
 

@@ -13,9 +13,9 @@
 #include <ros/time.h>
 
 #include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <geometry_msgs/TransformStamped.h>
 
 // TF2
-#include <tf2/transform_datatypes.h>
 #include <tf2_ros/buffer.h>
 
 // MODELS
@@ -25,10 +25,6 @@
 #include <exception>
 #include <functional>
 #include <memory>
-
-namespace tf2 {
-    class Transform;
-}
 
 namespace tf2_ros {
     class TransformListener;
@@ -181,7 +177,7 @@ protected:
     void publishMapOdom(const ros::Time &stamp);
 
     TransformStatus transform(const std::string& target_frame, const std::string& source_frame,
-                              const ros::Time& time, tf2::Stamped<tf2::Transform>& transform);
+                              const ros::Time& time, geometry_msgs::TransformStamped& transform);
 
 };
 
