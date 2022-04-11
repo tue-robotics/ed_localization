@@ -101,7 +101,11 @@ void LocalizationRGBDTestPlugin::configure(tue::Configuration config)
     if (config.hasError())
         return;
 
+    rgbd_client_.initialize(ros::names::resolve(rgbd_topic));
+
     ros::NodeHandle nh;
+
+    masked_image_srv_client_ = nh.serviceClient<tue_msgs::GetMaskedImage>(masked_image_srv);
 
     std::string initial_pose_topic;
     if (config.value("initial_pose_topic", initial_pose_topic, tue::config::OPTIONAL))
