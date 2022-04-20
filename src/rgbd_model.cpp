@@ -332,8 +332,6 @@ bool RGBDModel::generateWMImage(const ed::WorldModel& world, const MaskedImageCo
 
     bool success = generateWMImages(world, cam_, cam_pose_inv, depth_image, type_image, labels_);
 
-    ROS_ERROR_STREAM("Number of labels: " << labels_.size());
-
     labels = labels_;
 
     return success;
