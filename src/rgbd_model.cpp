@@ -21,6 +21,8 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
+#include <numeric>
+
 
 namespace ed_localization {
 
@@ -110,41 +112,55 @@ bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera&
     return true;
 }
 
-void generateMasks(const cv::Mat& type_image, const std::vector<std::string> labels, const std::map<std::string, std::vector<std::string>>& label_mapping, std::vector<cv::Mat>& masks)
+std::vector<std::string> generateMasks(const cv::Mat& type_image, const std::vector<std::string> labels, const std::map<std::string, std::string>& label_mapping, std::vector<cv::Mat>& masks)
 {
-    cv::Mat lookUpTable = cv::Mat::zeros(1, labels.size(), CV_8UC1);
-    std::vector<uint> used_labels(labels.size());
+    cv::Mat lookUpTable = cv::Mat::zeros(1, 256, CV_8UC1);
+    std::vector<uint> used_labels;
+    used_labels.reserve(labels.size());
+    std::vector<std::string> new_labels;
+    new_labels.reserve(labels.size());
 
-    masks.resize(labels.size());
+    masks.reserve(labels.size());
+    masks.clear(); // Just to be sure;
 
     for (uint i = 0; i<labels.size(); ++i)
     {
-        auto found = std::find(used_labels.cbegin(), used_labels.cend(), i);
-        if (found != used_labels.cend())
+        auto used = std::find(used_labels.cbegin(), used_labels.cend(), i);
+        if (used != used_labels.cend())
+        {
+            ROS_DEBUG_STREAM_NAMED("rgbd_model", "Found label: " << labels[i] << " already in used labels");
             continue; // Label has been mapped to another label
+        }
+        std::string label = labels[i];
+        label = label.substr(0, label.find("^")); // Strip instance counter
+
+        std::string mapped_label("");
+        const auto it = label_mapping.find(label);
+        if (it != label_mapping.cend())
+        {
+            mapped_label = it->second;
+        }
 
         lookUpTable = 0; // Reset
         lookUpTable.at<uchar>(i) = 1;
-        used_labels.push_back(i);
 
-        const std::string& label = labels[i];
-        auto found2 = label_mapping.find(label.substr(0, label.find("^")));
-        if (found2 == label_mapping.cend())
-            continue; // No other labels to map to this label found
-
-        for (const std::string& other_label : found2->second)
+        for (uint i2 = i+1; i2<labels.size(); ++i2)
         {
-            for (auto it = std::find(labels.cbegin(), labels.cend(), other_label.substr(0, other_label.find("^"))); it != labels.cend(); ++it)
-            {
-                // We have found another label to map, which is also pressent in this image
-                uint i2 = it - labels.cbegin();
-                lookUpTable.at<uchar>(i2) = 1;
-            }
+            std::string search_label = labels[i2];
+            search_label = search_label.substr(0, search_label.find("^"));
+            if (search_label != label && search_label != mapped_label)
+                continue;
+
+            ROS_DEBUG_STREAM_NAMED("rgbd_model", "For label '" << label << "' and mapped_label '" << mapped_label << "' found '" << search_label << "'");
+            used_labels.push_back(i2);
+            lookUpTable.at<uchar>(i2) = 1;
         }
 
-        masks[i] = cv::Mat(type_image.size(), CV_8UC1);
-        cv::LUT(type_image, lookUpTable, masks[i]);
+        new_labels.push_back(mapped_label.empty() ? label : mapped_label);
+        masks.push_back(cv::Mat(type_image.size(), CV_8UC1));
+        cv::LUT(type_image, lookUpTable, masks.back());
     }
+    return new_labels;
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -152,6 +168,8 @@ void generateMasks(const cv::Mat& type_image, const std::vector<std::string> lab
 RGBDModel::RGBDModel() : range_max_(10)
 {
     labels_.reserve(10);
+    mapping_["dining table"] = "table";
+    mapping_["rug"] = "floor";
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -375,25 +393,94 @@ bool RGBDModel::generateWMImage(const ed::WorldModel& world, const MaskedImageCo
 
 double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& type_image, const cv::Mat& sensor_depth_image, const cv::Mat& sensor_type_image, const std::vector<std::string>& sensor_labels)
 {
-    double p = 0.;
+    double p = 1;
 
-    int total_pixels = size_.area();
-    if (num_pixels_ == 0)
-        num_pixels_ = total_pixels;
-    uint pixel_step = std::max(total_pixels/num_pixels_, 1); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
-    for (uint i = 0; i<total_pixels; i+=pixel_step)
+    ROS_ERROR("sensor_masks");
+    std::vector<cv::Mat> sensor_masks(sensor_labels.size()); // Not all indexes will be used, when labels are mapped
+    std::vector<std::string> new_sensor_labels = generateMasks(sensor_type_image, sensor_labels, mapping_, sensor_masks);
+
+    ROS_ERROR("masks");
+    std::vector<cv::Mat> masks(labels_.size());
+    generateMasks(type_image, labels_, mapping_, masks);
+
+    std::stringstream ss;
+    ss << "[";
+    for (auto& i : labels_)
+        ss << i << ", ";
+    ss << "]";
+
+    ROS_WARN_STREAM("labels_: " << ss.str());
+
+    std::stringstream ss2;
+    ss2 << "[";
+    for (auto& i : sensor_labels)
+        ss2 << i << ", ";
+    ss2 << "]";
+
+    ROS_WARN_STREAM("sensor_labels: " << ss2.str());
+
+    std::stringstream ss3;
+    ss3 << "[";
+    for (auto& i : new_sensor_labels)
+        ss3 << i << ", ";
+    ss3 << "]";
+
+    ROS_WARN_STREAM("new_sensor_labels: " << ss3.str());
+
+    for (uint i = 0; i<labels_.size(); ++i)
     {
-        uchar sensor_label_index = sensor_type_image.at<uchar>(i);
-        uchar label_index = type_image.at<uchar>(i);
-        if (sensor_label_index == UINT8_MAX || label_index == UINT8_MAX)
-            continue; // Skip pixels that are not labeled
-        if (sensor_labels[sensor_label_index] == labels_[label_index])
+        const std::string& label = labels_[i];
+        ROS_ERROR_STREAM("label: " << label);
+        auto found = std::find(new_sensor_labels.cbegin(), new_sensor_labels.cend(), label);
+        if (found == new_sensor_labels.cend())
         {
-            ++p;
+            continue;
         }
+        uint sensor_i = found - new_sensor_labels.cbegin();
+        ROS_ERROR_STREAM("Found sensor label at: " << sensor_i << ", '" << *found << "'");
+
+        const cv::Mat& mask = masks[i];
+        if (mask.empty())
+        {
+            ROS_ERROR("Mask empty");
+            continue;
+        }
+        const cv::Mat& sensor_mask = sensor_masks[sensor_i];
+        if (sensor_masks.empty())
+        {
+            ROS_ERROR("sensor mask empty");
+            continue;
+        }
+
+        cv::Mat img_union = mask | sensor_mask;
+        cv::Mat img_intersection = mask & sensor_mask;
+
+        int count_union = cv::countNonZero(img_union);
+        int count_intersection = cv::countNonZero(img_intersection);
+        double prob = static_cast<double>(count_intersection) / static_cast<double>(count_union);
+
+        ROS_ERROR_STREAM("Intersection: " << count_intersection << ", Union: " << count_union << ", prob: " << prob);
     }
 
-    p /= num_pixels_;
+
+
+//    int total_pixels = size_.area();
+//    if (num_pixels_ == 0)
+//        num_pixels_ = total_pixels;
+//    uint pixel_step = std::max(total_pixels/num_pixels_, 1); // NOLINT(clang-analyzer-core.UndefinedBinaryOperatorResult)
+//    for (uint i = 0; i<total_pixels; i+=pixel_step)
+//    {
+//        uchar sensor_label_index = sensor_type_image.at<uchar>(i);
+//        uchar label_index = type_image.at<uchar>(i);
+//        if (sensor_label_index == UINT8_MAX || label_index == UINT8_MAX)
+//            continue; // Skip pixels that are not labeled
+//        if (sensor_labels[sensor_label_index] == labels_[label_index])
+//        {
+//            ++p;
+//        }
+//    }
+
+//    p /= num_pixels_;
 
     return p;
 }

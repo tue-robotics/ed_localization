@@ -58,6 +58,9 @@ private:
     geo::DepthCamera cam_;
     cv::Size size_;
 
+    // label_mapping
+    std::map<std::string, std::string> mapping_;
+
 };
 
 }
