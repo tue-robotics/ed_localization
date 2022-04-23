@@ -47,7 +47,7 @@ private:
 
     std::vector<std::string> labels_;
 
-    double range_max;
+    double range_max_;
 
     int num_pixels_;
 

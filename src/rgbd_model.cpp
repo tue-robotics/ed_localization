@@ -110,14 +110,48 @@ bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera&
     return true;
 }
 
+void generateMasks(const cv::Mat& type_image, const std::vector<std::string> labels, const std::map<std::string, std::vector<std::string>>& label_mapping, std::vector<cv::Mat>& masks)
+{
+    cv::Mat lookUpTable = cv::Mat::zeros(1, labels.size(), CV_8UC1);
+    std::vector<uint> used_labels(labels.size());
+
+    masks.resize(labels.size());
+
+    for (uint i = 0; i<labels.size(); ++i)
+    {
+        auto found = std::find(used_labels.cbegin(), used_labels.cend(), i);
+        if (found != used_labels.cend())
+            continue; // Label has been mapped to another label
+
+        lookUpTable = 0; // Reset
+        lookUpTable.at<uchar>(i) = 1;
+        used_labels.push_back(i);
+
+        const std::string& label = labels[i];
+        auto found2 = label_mapping.find(label.substr(0, label.find("^")));
+        if (found2 == label_mapping.cend())
+            continue; // No other labels to map to this label found
+
+        for (const std::string& other_label : found2->second)
+        {
+            for (auto it = std::find(labels.cbegin(), labels.cend(), other_label.substr(0, other_label.find("^"))); it != labels.cend(); ++it)
+            {
+                // We have found another label to map, which is also pressent in this image
+                uint i2 = it - labels.cbegin();
+                lookUpTable.at<uchar>(i2) = 1;
+            }
+        }
+
+        masks[i] = cv::Mat(type_image.size(), CV_8UC1);
+        cv::LUT(type_image, lookUpTable, masks[i]);
+    }
+}
+
 // ----------------------------------------------------------------------------------------------------
 
-RGBDModel::RGBDModel()
+RGBDModel::RGBDModel() : range_max_(10)
 {
     labels_.reserve(10);
-
-    // DEFAULT:
-    range_max = 10;      // m
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -133,7 +167,7 @@ void RGBDModel::configure(tue::Configuration config)
 {
     config.value("num_pixels", num_pixels_);
 
-    config.value("range_max", range_max);
+    config.value("range_max", range_max_);
 
     double min_particle_distance;
     config.value("min_particle_distance", min_particle_distance);
