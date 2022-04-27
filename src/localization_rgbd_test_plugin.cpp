@@ -128,6 +128,13 @@ void LocalizationRGBDTestPlugin::configure(tue::Configuration config)
 
     geo::Transform2d initial_pose = getInitialPose(nh, config);
 
+    geo::Pose3D initial_pose_3d = initial_pose.projectTo3d();
+    geometry_msgs::PoseWithCovarianceStamped* msg = new geometry_msgs::PoseWithCovarianceStamped();
+    geo::convert(initial_pose_3d, msg->pose.pose);
+    msg->header.frame_id = map_frame_id_;
+    msg->header.stamp = ros::Time::now();
+    initial_pose_msg_ = geometry_msgs::PoseWithCovarianceStampedConstPtr(msg);
+
     config.value("robot_name", robot_name_);
 }
 
