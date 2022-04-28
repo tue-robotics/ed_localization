@@ -354,7 +354,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
             double prob = static_cast<double>(count_intersection) / static_cast<double>(count_union);
 
             ROS_DEBUG_STREAM_NAMED("rgbd_model", "Label: " << label << ", Intersection: " << count_intersection << ", Union: " << count_union << ", prob: " << prob);
-            p += prob * prob * prob;
+            p += prob * prob;
         }
     }
 
@@ -479,7 +479,7 @@ double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& typ
         double prob = static_cast<double>(count_intersection) / static_cast<double>(count_union);
 
         ROS_DEBUG_STREAM_NAMED("rgbd_model", "Label: " << label << ", Intersection: " << count_intersection << ", Union: " << count_union << ", prob: " << prob);
-        p += prob * prob * prob;
+        p += prob * prob;
     }
 
 
