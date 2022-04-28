@@ -93,7 +93,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     // Check if particle filter is initialized
     if (particle_filter_.samples().empty())
     {
-        ROS_ERROR_NAMED("Localization", "(update) Empty particle filter");
+        ROS_ERROR_NAMED("localization", "(update) Empty particle filter");
         return UNKNOWN_ERROR;
     }
 
@@ -135,7 +135,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     bool resampled = false;
     if (update)
     {
-        ROS_DEBUG_NAMED("Localization", "Updating laser");
+        ROS_DEBUG_NAMED("localization", "Updating laser");
         // Update sensor
         laser_model_.updateWeights(world, *scan, particle_filter_);
 
@@ -221,7 +221,7 @@ void LocalizationPlugin::laserCallback(const sensor_msgs::LaserScanConstPtr& msg
 
 void LocalizationPlugin::visualize()
 {
-    ROS_DEBUG_NAMED("Localization", "Visualize");
+    ROS_DEBUG_NAMED("localization", "Visualize");
     int grid_size = 800;
     double grid_resolution = 0.025;
 
