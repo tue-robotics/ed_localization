@@ -394,30 +394,6 @@ double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& typ
     masks.reserve(labels_.size());
     generateMasks(type_image, labels_, mapping_, masks);
 
-    std::stringstream ss;
-    ss << "[";
-    for (auto& i : labels_)
-        ss << i << ", ";
-    ss << "]";
-
-    ROS_WARN_STREAM("labels_: " << ss.str());
-
-    std::stringstream ss2;
-    ss2 << "[";
-    for (auto& i : sensor_labels)
-        ss2 << i << ", ";
-    ss2 << "]";
-
-    ROS_WARN_STREAM("sensor_labels: " << ss2.str());
-
-    std::stringstream ss3;
-    ss3 << "[";
-    for (auto& i : new_sensor_labels)
-        ss3 << i << ", ";
-    ss3 << "]";
-
-    ROS_WARN_STREAM("new_sensor_labels: " << ss3.str());
-
     for (uint i = 0; i<labels_.size(); ++i)
     {
         const std::string& label = labels_[i];
