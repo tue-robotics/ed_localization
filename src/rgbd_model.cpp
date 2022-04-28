@@ -393,7 +393,7 @@ bool RGBDModel::generateWMImage(const ed::WorldModel& world, const MaskedImageCo
 
 double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& type_image, const cv::Mat& sensor_depth_image, const cv::Mat& sensor_type_image, const std::vector<std::string>& sensor_labels)
 {
-    double p = 0;
+    double p = 1;
 
     ROS_ERROR("sensor_masks");
     std::vector<cv::Mat> sensor_masks(sensor_labels.size()); // Not all indexes will be used, when labels are mapped
@@ -460,7 +460,7 @@ double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& typ
         double prob = static_cast<double>(count_intersection) / static_cast<double>(count_union);
 
         ROS_ERROR_STREAM("Intersection: " << count_intersection << ", Union: " << count_union << ", prob: " << prob);
-        p = std::max(p, prob);
+        p += prob * prob * prob;
     }
 
 
