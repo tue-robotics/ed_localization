@@ -401,7 +401,7 @@ double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& typ
         auto found = std::find(new_sensor_labels.cbegin(), new_sensor_labels.cend(), label);
         if (found == new_sensor_labels.cend())
         {
-            continue;
+            continue; // Not found a match
         }
         uint sensor_i = found - new_sensor_labels.cbegin();
 
