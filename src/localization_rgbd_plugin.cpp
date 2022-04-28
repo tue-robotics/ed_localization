@@ -95,7 +95,7 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     // Check if particle filter is initialized
     if (particle_filter_.samples().empty())
     {
-        ROS_ERROR_NAMED("Localization", "(update) Empty particle filter");
+        ROS_ERROR_NAMED("localization", "(update) Empty particle filter");
         return UNKNOWN_ERROR;
     }
 
@@ -151,7 +151,7 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     bool resampled = false;
     if (update)
     {
-        ROS_DEBUG_NAMED("Localization", "Updating RGBD");
+        ROS_DEBUG_NAMED("localization", "Updating RGBD");
         // Update sensor
         bool success = rgbd_model_.updateWeights(world, masked_image_future, base_link_to_camera, particle_filter_);
         if (!success)
