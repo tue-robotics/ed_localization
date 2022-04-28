@@ -386,12 +386,12 @@ double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& typ
 {
     double p = 1;
 
-    ROS_ERROR("sensor_masks");
-    std::vector<cv::Mat> sensor_masks(sensor_labels.size()); // Not all indexes will be used, when labels are mapped
+    std::vector<cv::Mat> sensor_masks;
+    sensor_masks.reserve(sensor_labels.size()); // Not all indexes will be used, when labels are mapped
     std::vector<std::string> new_sensor_labels = generateMasks(sensor_type_image, sensor_labels, mapping_, sensor_masks);
 
-    ROS_ERROR("masks");
-    std::vector<cv::Mat> masks(labels_.size());
+    std::vector<cv::Mat> masks;
+    masks.reserve(labels_.size());
     generateMasks(type_image, labels_, mapping_, masks);
 
     std::stringstream ss;
