@@ -60,7 +60,7 @@ void ParticleFilter::configure(tue::Configuration config)
 
     kd_tree_ = std::make_unique<ed_localization::KDTree>(max_samples_, cell_size);
 
-    ROS_INFO_STREAM_NAMED("Localization", "min_samples: " << min_samples_ << ", max_samples: " << max_samples_ << std::endl
+    ROS_INFO_STREAM_NAMED("pf", "min_samples: " << min_samples_ << ", max_samples: " << max_samples_ << std::endl
                           << "kld_err: " << kld_err_ << ", kld_z: " << kld_z_ << std::endl
                           << "recovery_alpha_slow: " << alpha_slow_ << ", recovery_alpha_fast: " << alpha_fast_ << std::endl
                           << "cell_size_x: " << cell_size[0] << ", cell_size_y: " << cell_size[1] << ", cell_size_theta: " << cell_size[2]);
