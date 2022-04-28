@@ -73,12 +73,10 @@ bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera&
 
         if (e->shape() && e->has_pose() && (id.size() < 5 || id.substr(id.size() - 5) != "floor") && !e->hasFlag("self")) // Filter ground plane
         {
-//            ROS_WARN_STREAM("Rendering: " << id);
             geo::Pose3D pose = cam_pose_inv * e->pose();
             geo::RenderOptions opt;
             opt.setMesh(e->shape()->getMesh(), pose);
 
-//            ROS_WARN_STREAM("type: " << e->type());
             const std::string& type = e->type();
             unsigned int index;
             if (type.empty())
@@ -93,11 +91,9 @@ bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera&
                     labels.push_back(type);
             }
 
-            // Should be commented/removed for perfomance
-//            if (labels.size() >= UINT8_MAX)
-//                ROS_ERROR_STREAM("Labels can not be longer than " << UINT8_MAX << ". As it the type image use UINT8");
+            assert(("Labels can not be longer than UINT*_MAX", labels.size() < UINT8_MAX));
 
-//            ROS_WARN_STREAM("type index: " << index);
+            // Set the value to be set
             res.setType(index);
 
             // Render
