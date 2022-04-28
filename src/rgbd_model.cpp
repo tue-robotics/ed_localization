@@ -240,7 +240,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     // update is not neccesary. This typically holds if the robot is standing still.
     if (unique_samples.size() == 1)
     {
-        ROS_ERROR("(RGBD) Only one unique sample found");
+        ROS_ERROR_NAMED("rgbd_model", "(RGBD) Only one unique sample found");
         return false;
     }
 
@@ -255,7 +255,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
          masked_image = masked_image_future.get();
          if (!masked_image)
          {
-             ROS_ERROR("(RGBD) Could not get masked image1");
+             ROS_ERROR_NAMED("rgbd_model", "(RGBD) Could not get masked image1");
              return false;
          }
          cam_ = geo::DepthCamera(masked_image->rgbd_image->getCameraModel());
@@ -287,7 +287,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
         masked_image = masked_image_future.get();
         if (!masked_image)
         {
-            ROS_ERROR("(RGBD) Could not get masked image2");
+            ROS_ERROR_NAMED("rgbd_model", "(RGBD) Could not get masked image2");
             return false;
         }
     }
@@ -363,7 +363,7 @@ bool RGBDModel::generateWMImage(const ed::WorldModel& world, const MaskedImageCo
     {
          if (!masked_image)
          {
-             ROS_ERROR("(RGBD) Empty masked image");
+             ROS_ERROR_NAMED("rgbd_model", "(RGBD) Empty masked image");
              return false;
          }
          cam_ = geo::DepthCamera(masked_image->rgbd_image->getCameraModel());
@@ -421,25 +421,24 @@ double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& typ
     for (uint i = 0; i<labels_.size(); ++i)
     {
         const std::string& label = labels_[i];
-        ROS_ERROR_STREAM("label: " << label);
+
         auto found = std::find(new_sensor_labels.cbegin(), new_sensor_labels.cend(), label);
         if (found == new_sensor_labels.cend())
         {
             continue;
         }
         uint sensor_i = found - new_sensor_labels.cbegin();
-        ROS_ERROR_STREAM("Found sensor label at: " << sensor_i << ", '" << *found << "'");
 
         const cv::Mat& mask = masks[i];
         if (mask.empty())
         {
-            ROS_ERROR("Mask empty");
+            ROS_DEBUG_STREAM_NAMED("rgbd_model", "Mask empty");
             continue;
         }
         const cv::Mat& sensor_mask = sensor_masks[sensor_i];
         if (sensor_masks.empty())
         {
-            ROS_ERROR("sensor mask empty");
+            ROS_DEBUG_STREAM_NAMED("rgbd_model", "sensor mask empty");
             continue;
         }
 
@@ -450,7 +449,7 @@ double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& typ
         int count_intersection = cv::countNonZero(img_intersection);
         double prob = static_cast<double>(count_intersection) / static_cast<double>(count_union);
 
-        ROS_ERROR_STREAM("Intersection: " << count_intersection << ", Union: " << count_union << ", prob: " << prob);
+        ROS_DEBUG_STREAM_NAMED("rgbd_model", "Label: " << label << ", Intersection: " << count_intersection << ", Union: " << count_union << ", prob: " << prob);
         p += prob * prob * prob;
     }
 
