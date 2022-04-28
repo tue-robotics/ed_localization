@@ -178,7 +178,7 @@ void RGBDModel::configure(tue::Configuration config)
 
     config.value("range_max", range_max_);
 
-    double min_particle_distance;
+    double min_particle_distance = 0;
     config.value("min_particle_distance", min_particle_distance);
     min_particle_distance_sq_ = min_particle_distance * min_particle_distance;
 
