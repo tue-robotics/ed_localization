@@ -296,13 +296,58 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     const cv::Mat& sensor_type_image = masked_image->mask->image;
     const std::vector<std::string>& sensor_labels = masked_image->labels;
 
-    std::vector<double> weight_updates(unique_samples.size(), 0.);
+    std::vector<cv::Mat> sensor_masks;
+    sensor_masks.reserve(sensor_labels.size()); // Not all indexes will be used, when labels are mapped
+    std::vector<std::string> new_sensor_labels = generateMasks(sensor_type_image, sensor_labels, mapping_, sensor_masks);
+
+    std::vector<double> weight_updates(unique_samples.size(), 1);
 
     for (uint sample_i = 0; sample_i < unique_samples.size(); ++sample_i)
     {
         const cv::Mat& depth_image = depth_images[sample_i];
         const cv::Mat& type_image = type_images[sample_i];
-        weight_updates[sample_i] = getParticleProp(depth_image, type_image, sensor_depth_image, sensor_type_image, sensor_labels);
+//        weight_updates[sample_i] = getParticleProp(depth_image, type_image, sensor_depth_image, sensor_type_image, sensor_labels);
+
+        std::vector<cv::Mat> masks;
+        masks.reserve(labels_.size());
+        generateMasks(type_image, labels_, mapping_, masks);
+
+        double& p = weight_updates[sample_i];
+
+        for (uint i = 0; i<labels_.size(); ++i)
+        {
+            const std::string& label = labels_[i];
+
+            auto found = std::find(new_sensor_labels.cbegin(), new_sensor_labels.cend(), label);
+            if (found == new_sensor_labels.cend())
+            {
+                continue; // Not found a match
+            }
+            uint sensor_i = found - new_sensor_labels.cbegin();
+
+            const cv::Mat& mask = masks[i];
+            if (mask.empty())
+            {
+                ROS_DEBUG_STREAM_NAMED("rgbd_model", "Mask empty");
+                continue;
+            }
+            const cv::Mat& sensor_mask = sensor_masks[sensor_i];
+            if (sensor_masks.empty())
+            {
+                ROS_DEBUG_STREAM_NAMED("rgbd_model", "sensor mask empty");
+                continue;
+            }
+
+            cv::Mat img_union = mask | sensor_mask;
+            cv::Mat img_intersection = mask & sensor_mask;
+
+            int count_union = cv::countNonZero(img_union);
+            int count_intersection = cv::countNonZero(img_intersection);
+            double prob = static_cast<double>(count_intersection) / static_cast<double>(count_union);
+
+            ROS_DEBUG_STREAM_NAMED("rgbd_model", "Label: " << label << ", Intersection: " << count_intersection << ", Union: " << count_union << ", prob: " << prob);
+            p += prob * prob * prob;
+        }
     }
 
 //    int total_pixels = size_.area();
