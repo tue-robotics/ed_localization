@@ -243,6 +243,10 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
         ROS_ERROR_NAMED("rgbd_model", "(RGBD) Only one unique sample found");
         return false;
     }
+    if (unique_samples.size() != pf.samples().size())
+    {
+        ROS_ERROR_STREAM_NAMED("rgbd_model", "Unique_samples is not the same size: " << unique_samples.size() << " vs " << pf.samples().size());
+    }
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Render world model type/depth image
