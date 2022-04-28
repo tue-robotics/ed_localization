@@ -63,7 +63,7 @@ LocalizationPluginBase::~LocalizationPluginBase()
     }
     catch (tf2::TransformException ex)
     {
-        ROS_ERROR_STREAM_NAMED("Localization", ex.what());
+        ROS_ERROR_STREAM_NAMED("localization", ex.what());
     }
 
     cv::destroyAllWindows();
@@ -170,7 +170,7 @@ geo::Transform2 LocalizationPluginBase::tryGetInitialPoseFromParamServer(const r
     if (!nh.getParam("initial_pose", ros_param_position))
     {
         std::string msg = "Could not read initial pose from the parameter server";
-        ROS_WARN_STREAM_NAMED("Localization", msg);
+        ROS_WARN_STREAM_NAMED("localization", msg);
         throw ConfigurationException(msg);
     }
 
@@ -184,7 +184,7 @@ geo::Transform2 LocalizationPluginBase::tryGetInitialPoseFromParamServer(const r
     if (!tf_buffer_.canTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
     {
         std::string msg = "No transform between odom and base_link";
-        ROS_ERROR_STREAM_NAMED("Localization", msg);
+        ROS_ERROR_STREAM_NAMED("localization", msg);
         throw ConfigurationException(msg);
     }
 
@@ -203,7 +203,7 @@ geo::Transform2 LocalizationPluginBase::tryGetInitialPoseFromParamServer(const r
         result.t.y = pos_map_baselink.y();
         result.setRotation(rotation_map_baselink.getAngle());
 
-        ROS_DEBUG_STREAM_NAMED("Localization", "Initial pose from parameter server: [" <<
+        ROS_DEBUG_STREAM_NAMED("localization", "Initial pose from parameter server: [" <<
             result.t.x << ", " << result.t.y << "], yaw:" << result.rotation()
         );
         return result;
@@ -211,7 +211,7 @@ geo::Transform2 LocalizationPluginBase::tryGetInitialPoseFromParamServer(const r
     catch (const tf2::TransformException& ex)
     {
         std::string msg = std::string(ex.what());
-        ROS_ERROR_STREAM_NAMED("Localization", msg);
+        ROS_ERROR_STREAM_NAMED("localization", msg);
         throw ConfigurationException(msg);
     }
 }
@@ -231,7 +231,7 @@ geo::Transform2 LocalizationPluginBase::tryGetInitialPoseFromConfig(tue::Configu
     else
     {
         std::string message = "Initial pose not present in config";
-        ROS_WARN_STREAM_NAMED("Localization", message);
+        ROS_WARN_STREAM_NAMED("localization", message);
         throw ConfigurationException(message);
     }
 
@@ -287,7 +287,7 @@ bool LocalizationPluginBase::resample(const ed::WorldModel& world)
     if(++resample_count_ % resample_interval_)
         return false;
 
-    ROS_DEBUG_NAMED("Localization", "resample particle filter");
+    ROS_DEBUG_NAMED("localization", "resample particle filter");
     const std::function<void()> update_map_size_func = std::bind(&LocalizationPluginBase::updateMapSize, this, std::ref(world));
     const std::function<geo::Transform2()> gen_random_pose_func = std::bind(&LocalizationPluginBase::generateRandomPose, this, update_map_size_func);
     particle_filter_.resample(gen_random_pose_func);
@@ -298,7 +298,7 @@ bool LocalizationPluginBase::resample(const ed::WorldModel& world)
 
 void LocalizationPluginBase::publishParticles(const ros::Time &stamp)
 {
-    ROS_DEBUG_NAMED("Localization", "Publishing particles");
+    ROS_DEBUG_NAMED("localization", "Publishing particles");
     const std::vector<Sample>& samples = particle_filter_.samples();
     visualization_msgs::MarkerArray particles_msg;
     particles_msg.markers.resize(std::max<uint>(old_msg_size_, samples.size()));
@@ -335,7 +335,7 @@ void LocalizationPluginBase::publishParticles(const ros::Time &stamp)
 
 void LocalizationPluginBase::updateMapOdom(const geo::Pose3D& odom_to_base_link)
 {
-    ROS_DEBUG_NAMED("Localization", "Updating map_odom");
+    ROS_DEBUG_NAMED("localization", "Updating map_odom");
     // Get the best pose (2D)
     geo::Transform2 mean_pose = particle_filter_.calculateMeanPose();
     ROS_DEBUG_STREAM("mean_pose: x: " << mean_pose.t.x << ", y: " << mean_pose.t.y << ", yaw: " << mean_pose.rotation());
