@@ -42,14 +42,9 @@ public:
 
     void renderPixel(int x, int y, float depth, int i_triangle)
     {
-//        auto& size = depth_image_.size;
-//        ROS_WARN_STREAM("Size: " << size[0] << " x " << size[1]);
-//        ROS_WARN_STREAM("y: " << y << ", x: " << x);
-        float old_depth = depth_image_.at<float>(y, x);
-//        ROS_WARN_STREAM("old_depth: " << old_depth << std::endl << "depth: " << depth);
+        const float& old_depth = depth_image_.at<float>(y, x);
         if (old_depth <= 0 || depth < old_depth)
         {
-//            ROS_WARN("RENDER THAT SHIT");
             depth_image_.at<float>(y, x) = depth;
             type_image_.at<unsigned char>(y, x) = type_;
         }
