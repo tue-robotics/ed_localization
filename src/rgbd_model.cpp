@@ -71,7 +71,7 @@ bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera&
         const ed::EntityConstPtr& e = *it;
         const std::string& id = e->id().str();
 
-        if (e->shape() && e->has_pose() && (id.size() < 5 || id.substr(id.size() - 5) != "floor") && !e->hasFlag("self")) // Filter ground plane
+        if (e->shape() && e->has_pose() && !e->hasFlag("self"))
         {
             geo::Pose3D pose = cam_pose_inv * e->pose();
             geo::RenderOptions opt;
