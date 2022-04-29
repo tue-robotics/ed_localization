@@ -387,13 +387,6 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     // -     Update the particle filter
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    std::stringstream ss;
-    ss << "[";
-    for (auto& i : weight_updates)
-        ss << i << ", ";
-    ss << "]";
-
-    ROS_WARN_STREAM("Unique samples: " << ss.str());
     for(unsigned int j = 0; j < pf.samples().size(); ++j)
     {
         Sample& sample = pf.samples()[j];
