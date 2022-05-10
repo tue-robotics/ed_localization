@@ -277,6 +277,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     type_images.resize(unique_samples.size());
 
     tue::Timer timer;
+    ros::Time start = ros::Time::now();
     timer.start();
     for (uint i = 0; i < unique_samples.size(); ++i)
     {
@@ -291,7 +292,8 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
         bool success = generateWMImages(world, cam_, cam_pose.inverse(), depth_image, type_image, labels_);
     }
     timer.stop();
-    ROS_ERROR_STREAM("Generating " << unique_samples.size() << " WM images took " << static_cast<double>(timer.getElapsedTimeInMicroSec()) << " ms.");
+    ros::Time end = ros::Time::now();
+    ROS_ERROR_STREAM("Generating " << unique_samples.size() << " WM images took " << static_cast<double>(timer.getElapsedTimeInMicroSec()) << " ms or " << end-start << " seconds");
 
     if(!masked_image)
     {
@@ -310,6 +312,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
 
     timer = tue::Timer();
     timer.start();
+    start = ros::Time::now();
     std::vector<cv::Mat> sensor_masks;
     sensor_masks.reserve(sensor_labels.size()); // Not all indexes will be used, when labels are mapped
     std::vector<std::string> new_sensor_labels = generateMasks(sensor_type_image, sensor_labels, mapping_, sensor_masks);
@@ -364,7 +367,8 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
         }
     }
     timer.stop();
-    ROS_ERROR_STREAM("Generating masks and comparing for " << unique_samples.size() << " samples took " << static_cast<double>(timer.getElapsedTimeInMicroSec()) << " ms.");
+    end = ros::Time::now();
+    ROS_ERROR_STREAM("Generating masks and comparing for " << unique_samples.size() << " samples took " << static_cast<double>(timer.getElapsedTimeInMicroSec()) << " ms or " << end-start << " seconds");
 
 //    int total_pixels = size_.area();
 //    if (num_pixels_ == 0)
