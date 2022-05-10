@@ -1,5 +1,7 @@
 #include "ed_localization/odom_model.h"
 
+#include <ros/console.h>
+
 // ----------------------------------------------------------------------------------------------------
 
 // Draw randomly from a zero-mean Gaussian distribution, with standard
@@ -51,6 +53,7 @@ void OdomModel::configure(tue::Configuration config)
 
 void OdomModel::updatePoses(const geo::Transform2& movement, ParticleFilter& pf)
 {
+    ROS_DEBUG_STREAM_NAMED("odom_model", "Applying a movement of " << movement);
     double delta_trans_sq = movement.t.length2();
 
     double delta_rot = movement.rotation();
