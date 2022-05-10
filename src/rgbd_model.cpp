@@ -276,6 +276,8 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     depth_images.resize(unique_samples.size()); // Do not provide default object, as the cv::Mat copy constructor creates a new pointer to the same data
     type_images.resize(unique_samples.size());
 
+    tue::Timer timer;
+    timer.start();
     for (uint i = 0; i < unique_samples.size(); ++i)
     {
         const geo::Transform2& sample = unique_samples[i];
@@ -288,6 +290,8 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
 
         bool success = generateWMImages(world, cam_, cam_pose.inverse(), depth_image, type_image, labels_);
     }
+    timer.stop();
+    ROS_ERROR_STREAM("Generating " << unique_samples.size() << " WM images took " << timer.getElapsedTimeInMicroSec() << " ms.");
 
     if(!masked_image)
     {
@@ -304,6 +308,8 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
     const cv::Mat& sensor_type_image = masked_image->mask->image;
     const std::vector<std::string>& sensor_labels = masked_image->labels;
 
+    timer = tue::Timer();
+    timer.start();
     std::vector<cv::Mat> sensor_masks;
     sensor_masks.reserve(sensor_labels.size()); // Not all indexes will be used, when labels are mapped
     std::vector<std::string> new_sensor_labels = generateMasks(sensor_type_image, sensor_labels, mapping_, sensor_masks);
@@ -357,6 +363,8 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
             p += prob * prob;
         }
     }
+    timer.stop();
+    ROS_ERROR_STREAM("Generating masks and comparing for " << unique_samples.size() << " samples took " << timer.getElapsedTimeInMicroSec() << " ms.");
 
 //    int total_pixels = size_.area();
 //    if (num_pixels_ == 0)
