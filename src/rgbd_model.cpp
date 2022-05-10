@@ -291,7 +291,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
         bool success = generateWMImages(world, cam_, cam_pose.inverse(), depth_image, type_image, labels_);
     }
     timer.stop();
-    ROS_ERROR_STREAM("Generating " << unique_samples.size() << " WM images took " << timer.getElapsedTimeInMicroSec() << " ms.");
+    ROS_ERROR_STREAM("Generating " << unique_samples.size() << " WM images took " << static_cast<double>(timer.getElapsedTimeInMicroSec()) << " ms.");
 
     if(!masked_image)
     {
@@ -364,7 +364,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
         }
     }
     timer.stop();
-    ROS_ERROR_STREAM("Generating masks and comparing for " << unique_samples.size() << " samples took " << timer.getElapsedTimeInMicroSec() << " ms.");
+    ROS_ERROR_STREAM("Generating masks and comparing for " << unique_samples.size() << " samples took " << static_cast<double>(timer.getElapsedTimeInMicroSec()) << " ms.");
 
 //    int total_pixels = size_.area();
 //    if (num_pixels_ == 0)
