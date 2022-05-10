@@ -352,7 +352,7 @@ void LocalizationPluginBase::updateMapOdom(const geo::Pose3D& odom_to_base_link)
 
 void LocalizationPluginBase::publishMapOdom(const ros::Time &stamp)
 {
-    ROS_DEBUG_THROTTLE_NAMED(2, "Localization", "Publishing map_odom");
+    ROS_DEBUG_STREAM_NAMED("localization", "Publishing map_odom with timestamp(incl. tolerance: " << transform_tolerance_ << "): " << stamp + transform_tolerance_);
     // Convert to TF transform
     geometry_msgs::TransformStamped latest_map_odom_tf;
     geo::convert(latest_map_odom_, latest_map_odom_tf.transform);
