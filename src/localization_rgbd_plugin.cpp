@@ -190,20 +190,24 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
 
 const MaskedImageConstPtr LocalizationRGBDPlugin::getMaskedImage(const rgbd::ImageConstPtr& img)
 {
+    ROS_DEBUG_STREAM_NAMED("localization", "Prepairing for a masked image service call");
     tue_msgs::GetMaskedImageRequest srv_req;
     tue_msgs::GetMaskedImageResponse srv_resp;
     rgbd::convert(img->getRGBImage(), srv_req.input_image);
     srv_req.input_image.header.frame_id = img->getFrameId();
     srv_req.input_image.header.stamp = ros::Time(img->getTimestamp());
+    ROS_DEBUG_STREAM_NAMED("localization", "Calling masked image service");
     if (!masked_image_srv_client_.call(srv_req, srv_resp))
     {
         ROS_ERROR("Could not get masked image");
         return nullptr;
     }
+    ROS_DEBUG_STREAM_NAMED("localization", "Receive a masked image");
     MaskedImagePtr masked_image(new MaskedImage);
     masked_image->rgbd_image = img;
     masked_image->mask = cv_bridge::toCvCopy(srv_resp.output_image.image);
     masked_image->labels = std::move(srv_resp.output_image.labels);
+    ROS_DEBUG_STREAM_NAMED("localization", "Processed the masked image");
 
     return masked_image;
 }
