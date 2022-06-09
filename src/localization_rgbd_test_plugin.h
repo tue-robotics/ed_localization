@@ -15,14 +15,8 @@
 #include <rgbd/client.h>
 #include <rgbd/types.h>
 
-// TF2
-#include <tf2_ros/buffer.h>
-
 // MODELS
 #include "rgbd_model.h"
-
-#include <functional>
-#include <memory>
 
 
 class LocalizationRGBDTestPlugin : public ed_localization::LocalizationPluginBase
