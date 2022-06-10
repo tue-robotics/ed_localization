@@ -15,6 +15,11 @@
       <description>Plugin to test RGBD model.</description>
     </class>
   </library>
+  <library path="lib/libed_localization_laser_test_plugin">
+    <class name="ed_localization/localization_laser_test" type="LocalizationLaserTestPlugin" base_class_type="ed::Plugin">
+      <description>Plugin to test laser model.</description>
+    </class>
+  </library>
   <library path="lib/libed_localization_tf_plugin">
     <class name="ed_localization/localization_tf" type="LocalizationTFPlugin" base_class_type="ed::Plugin">
       <description>Plugin set robot entity pose based on TF.</description>

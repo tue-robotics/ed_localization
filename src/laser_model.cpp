@@ -353,4 +353,171 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     pf.normalize(true);
 }
 
+// ----------------------------------------------------------------------------------------------------
+
+double LaserModel::getParticleProp(const ed::WorldModel& world, const sensor_msgs::LaserScan& scan, const geo::Transform2& pose)
+{
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Update world renderer
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    if (num_beams <= 0)
+        num_beams = scan.ranges.size();
+    else
+        num_beams = std::min<int>(scan.ranges.size(), num_beams);
+
+    int i_step = scan.ranges.size() / num_beams;
+    sensor_ranges_.clear();
+    for (unsigned int i = 0; i < scan.ranges.size(); i += i_step)
+    {
+        double r = scan.ranges[i];
+
+        // Check for Inf
+        if (r != r || r > scan.range_max)
+            r = 0;
+        sensor_ranges_.push_back(r);
+    }
+    num_beams = sensor_ranges_.size();
+
+    if (lrf_.getNumBeams() != num_beams)
+    {
+        lrf_.setNumBeams(num_beams);
+        lrf_.setAngleLimits(scan.angle_min, scan.angle_max);
+        range_max = std::min<double>(range_max, scan.range_max);
+    }
+
+    // If the laser is upside down, we need to mirror the sensor data
+    if (laser_upside_down_)
+        std::reverse(sensor_ranges_.begin(), sensor_ranges_.end());
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Determine center and maximum range of world model cross section
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    // Find the bounding rectangle around all sample poses. This will be used to determine
+    // the largest render distance (anything max_range beyond the sample boundaries does
+    // not have to be considered)
+
+    geo::Vec2 sample_min = pose.t;
+    geo::Vec2 sample_max = sample_min;
+
+    double temp_range_max = 0;
+    for(unsigned int i = 0; i < sensor_ranges_.size(); ++i)
+    {
+        double r = sensor_ranges_[i];
+        if (r < range_max)
+            temp_range_max = std::max(temp_range_max, r);
+    }
+
+    // Add a small buffer to the distance to allow model data that is
+    // slightly further away to still match
+    temp_range_max += lambda_short;
+
+    // Calculate the sample boundary center and boundary render distance
+    geo::Vec2 sample_center = sample_min;
+    double max_distance = temp_range_max;
+
+    // Set the range limit to the lrf renderer. This will make sure all shapes that
+    // are too far away will not be rendered (object selection, not line selection)
+    lrf_.setRangeLimits(scan.range_min, max_distance);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Create world model cross section
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    geo::Pose3D laser_pose(sample_center.x, sample_center.y, laser_height_);
+
+    lines_start_.clear();
+    lines_end_.clear();
+
+    // Give the max_distance also to the line renderer. It will discard all LINES that
+    // are further away. Note that this is an even finer selection than the default
+    // object selection that is done by the lrf renderer.
+    LineRenderResult render_result(lines_start_, lines_end_, max_distance);
+
+    for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
+    {
+        const ed::EntityConstPtr& e = *it;
+        if (e->shape() && e->has_pose())
+        {
+            // Do not render the robot itself (we're trying to localize it!)
+            if (e->hasFlag("self"))
+                continue;
+
+            if (e->hasFlag("non-localizable"))
+                continue;
+
+            geo::LaserRangeFinder::RenderOptions options;
+            geo::Transform t_inv = laser_pose.inverse() * e->pose();
+            options.setMesh(e->shape()->getMesh(), t_inv);
+            lrf_.render(options, render_result);
+        }
+    }
+
+    for(unsigned int i = 0; i < lines_start_.size(); ++i)
+    {
+        lines_start_[i] += sample_center;
+        lines_end_[i] += sample_center;
+    }
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    // -     Calculate sample weight updates
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+    lrf_.setRangeLimits(scan.range_min, temp_range_max);
+
+    geo::Transform2 laser_pose_2d = pose * laser_offset_;
+    geo::Transform2 pose_inv = laser_pose_2d.inverse();
+
+    // Calculate sensor model for this pose
+    std::vector<double> model_ranges(sensor_ranges_.size(), 0);
+
+    for(unsigned int i = 0; i < lines_start_.size(); ++i)
+    {
+        const geo::Vec2& p1 = lines_start_[i];
+        const geo::Vec2& p2 = lines_end_[i];
+
+        // Transform the points to the laser pose
+        geo::Vec2 p1_t = pose_inv * p1;
+        geo::Vec2 p2_t = pose_inv * p2;
+
+        // Render the line as if seen by the sensor
+        lrf_.renderLine(p1_t, p2_t, model_ranges);
+    }
+
+    double p = 1;
+
+    for(unsigned int i = 0; i < sensor_ranges_.size(); ++i)
+    {
+        double obs_range = sensor_ranges_[i];
+        double map_range = model_ranges[i];
+
+        double z = obs_range - map_range;
+
+        double pz = 0;
+
+        // Part 1: good, but noisy, hit
+        //            pz += this->z_hit * exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
+        pz += this->z_hit * exp_hit_[std::min(std::abs(z), range_max) * 1000];
+
+        // Part 2: short reading from unexpected obstacle (e.g., a person)
+        if(z < 0)
+            //                pz += this->z_short * this->lambda_short * exp(-this->lambda_short*obs_range);
+            pz += this->z_short * this->lambda_short * exp_short_[std::min(obs_range, range_max) * 1000];
+
+        // Part 3: Failure to detect obstacle, reported as max-range
+        if(obs_range >= this->range_max)
+            pz += this->z_max * 1.0;
+
+        // Part 4: Random measurements
+        if(obs_range < this->range_max)
+            pz += this->z_rand * 1.0 / this->range_max;
+
+        // here we have an ad-hoc weighting scheme for combining beam probs
+        // works well, though...
+        p += pz * pz * pz;
+    }
+    return p;
+}
+
 }

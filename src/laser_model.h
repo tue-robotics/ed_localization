@@ -27,6 +27,8 @@ public:
 
     void updateWeights(const ed::WorldModel& world, const sensor_msgs::LaserScan& scan, ParticleFilter& pf);
 
+    double getParticleProp(const ed::WorldModel& world, const sensor_msgs::LaserScan& scan, const geo::Transform2& pose);
+
     const std::vector<geo::Vec2>& lines_start() const { return lines_start_; }
     const std::vector<geo::Vec2>& lines_end() const { return lines_end_; }
 

@@ -64,6 +64,13 @@ add_library(ed_localization_plugin
 target_link_libraries(ed_localization_plugin ed_localization_plugin_base ed_localization_laser ${catkin_LIBRARIES})
 add_dependencies(ed_localization_plugin ${catkin_EXPORTED_TARGETS})
 
+add_library(ed_localization_laser_test_plugin
+  src/localization_laser_test_plugin.cpp
+  src/localization_laser_test_plugin.h
+)
+target_link_libraries(ed_localization_laser_test_plugin ed_localization_plugin_base ed_localization_laser ${catkin_LIBRARIES})
+add_dependencies(ed_localization_laser_test_plugin ${catkin_EXPORTED_TARGETS})
+
 add_library(ed_localization_rgbd
   src/rgbd_model.cpp
   src/rgbd_model.h
