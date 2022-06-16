@@ -4,6 +4,7 @@
 #include <ros/names.h>
 #include <ros/node_handle.h>
 #include <ros/subscribe_options.h>
+#include <ros/advertise_service_options.h>
 
 #include <cv_bridge/cv_bridge.h>
 
@@ -22,10 +23,6 @@
 #include <geolib/ros/tf2_conversions.h>
 
 #include <geometry_msgs/TransformStamped.h>
-
-#include <rgbd/ros/conversions.h>
-
-#include <visualization_msgs/MarkerArray.h>
 
 #include <future>
 #include <math.h>
@@ -119,6 +116,16 @@ void LocalizationLaserTestPlugin::configure(tue::Configuration config)
         sub_particle_pose_ = nh.subscribe(sub_opts);
     }
 
+    std::string particle_pose_srv;
+    if (config.value("particle_pose_srv", particle_pose_srv, tue::config::OPTIONAL))
+    {
+        // Subscribe to particle pose service
+        ros::AdvertiseServiceOptions srv_opts =
+                ros::AdvertiseServiceOptions::create<tue_msgs::PoseProbability>(
+                    particle_pose_srv, boost::bind(&LocalizationLaserTestPlugin::particlePoseProbCallBack, this, _1, _2), ros::VoidPtr(), &cb_queue_);
+        srv_particle_pose_prob_ = nh.advertiseService(srv_opts);
+    }
+
     geo::Transform2d initial_pose = getInitialPose(nh, config);
 
     geo::Pose3D initial_pose_3d = initial_pose.projectTo3d();
@@ -141,6 +148,8 @@ void LocalizationLaserTestPlugin::initialize()
 
 void LocalizationLaserTestPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
 {
+    world_ = &world;
+    req_ = &req;
     cb_queue_.callAvailable();
 
     if (initial_pose_msg_)
@@ -165,7 +174,8 @@ void LocalizationLaserTestPlugin::process(const ed::WorldModel& world, ed::Updat
     {
         if(scan_msg_)
         {
-            update(scan_msg_, world, req);
+            double prob;
+            update(scan_msg_, *particle_pose_msg_, world, req, prob);
             scan_msg_.reset();
         }
         particle_pose_msg_.reset();
@@ -178,20 +188,20 @@ void LocalizationLaserTestPlugin::process(const ed::WorldModel& world, ed::Updat
 
 // ----------------------------------------------------------------------------------------------------
 
-TransformStatus LocalizationLaserTestPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const ed::WorldModel& world, ed::UpdateRequest& req)
+TransformStatus LocalizationLaserTestPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const geometry_msgs::PoseStamped& pose_msg, const ed::WorldModel& world, ed::UpdateRequest& req, double& prob)
 {
     ROS_DEBUG_NAMED("localization", "Updating Laser");
 
     geo::Pose3D particle_pose;
-//    geometry_msgs::TransformStamped particle_pose_tf;
-//    TransformStatus ts = transform(base_link_frame_id_, map_frame_id_, ros::Time(img->getTimestamp()), particle_pose_tf);
-//    if (ts != OK)
-//    {
-//        ROS_ERROR_STREAM_NAMED("localization", "Could not transform to global frame: " << map_frame_id_ << ", from: " << base_link_frame_id_);
-//        return ts;
-//    }
-//    geo::convert(particle_pose_tf.transform, particle_pose);
-    geo::convert(particle_pose_msg_->pose, particle_pose); // Assuming the msg is in map frame
+    geometry_msgs::TransformStamped particle_pose_tf;
+    TransformStatus ts = transform(base_link_frame_id_, map_frame_id_, scan->header.stamp, particle_pose_tf);
+    if (ts != OK)
+    {
+        ROS_ERROR_STREAM_NAMED("localization", "Could not transform to global frame: " << map_frame_id_ << ", from: " << base_link_frame_id_);
+        return ts;
+    }
+    geo::convert(particle_pose_tf.transform, particle_pose);
+//    geo::convert(pose_msg.pose, particle_pose); // Assuming the msg is in map frame
 
     //  Get transformation from base_link to laser_frame
     if (!laser_offset_initialized_)
@@ -202,9 +212,11 @@ TransformStatus LocalizationLaserTestPlugin::update(const sensor_msgs::LaserScan
             return ts;
     }
 
-    double prob = laser_model_.getParticleProp(world, *scan, particle_pose.projectTo2d());
+    const geo::Transform2 particle_pose_2d = particle_pose.projectTo2d();
 
-    visualize(particle_pose.projectTo2d(), prob);
+    prob = laser_model_.getParticleProp(world, *scan, particle_pose_2d);
+
+    visualize(particle_pose_2d, prob);
 
     ROS_ERROR_STREAM_NAMED("localization", "Pose: " << particle_pose << std::endl << "resulted in " << prob);
 
@@ -240,6 +252,18 @@ TransformStatus LocalizationLaserTestPlugin::initLaserOffset(const std::string& 
     laser_offset_initialized_ = true;
 
     return OK;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+bool LocalizationLaserTestPlugin::particlePoseProbCallBack(const tue_msgs::PoseProbabilityRequest& req, tue_msgs::PoseProbabilityResponse& res)
+{
+    if(!scan_msg_)
+        return false;
+
+    update(scan_msg_, req.pose, *world_, *req_, res.probability);
+    scan_msg_.reset();
+    return true;
 }
 
 // ----------------------------------------------------------------------------------------------------

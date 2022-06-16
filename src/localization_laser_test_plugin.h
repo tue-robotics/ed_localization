@@ -9,8 +9,10 @@
 // ROS
 #include <sensor_msgs/LaserScan.h>
 #include <ros/subscriber.h>
+#include <ros/service_server.h>
 
 #include <geometry_msgs/PoseStamped.h>
+#include <tue_msgs/PoseProbability.h>
 
 // MODELS
 #include "laser_model.h"
@@ -56,14 +58,19 @@ protected:
     // Init
     ed_localization::TransformStatus initLaserOffset(const std::string& frame_id, const ros::Time& stamp);
     ros::Subscriber sub_particle_pose_;
+    ros::ServiceServer srv_particle_pose_prob_;
 
     // Callbacks
     void particlePoseCallBack(const geometry_msgs::PoseStampedConstPtr& msg);
+    bool particlePoseProbCallBack(const tue_msgs::PoseProbabilityRequest& req, tue_msgs::PoseProbabilityResponse& res);
     void laserCallback(const sensor_msgs::LaserScanConstPtr& msg);
 
-    ed_localization::TransformStatus update(const sensor_msgs::LaserScanConstPtr& laser_msg_, const ed::WorldModel& world, ed::UpdateRequest& req);
+    ed_localization::TransformStatus update(const sensor_msgs::LaserScanConstPtr& scan_msg_, const geometry_msgs::PoseStamped& pose_msg, const ed::WorldModel& world, ed::UpdateRequest& req, double& prob);
 
     void visualize(const geo::Transform2& pose, double prob);
+
+    const ed::WorldModel* world_;
+    ed::UpdateRequest* req_;
 };
 
 #endif
