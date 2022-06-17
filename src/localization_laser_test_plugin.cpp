@@ -192,15 +192,18 @@ TransformStatus LocalizationLaserTestPlugin::update(const sensor_msgs::LaserScan
 {
     ROS_DEBUG_NAMED("localization", "Updating Laser");
 
-    geo::Pose3D particle_pose;
-    geometry_msgs::TransformStamped particle_pose_tf;
-    TransformStatus ts = transform(base_link_frame_id_, map_frame_id_, scan->header.stamp, particle_pose_tf);
+    geometry_msgs::TransformStamped map_base_link_tf;
+    TransformStatus ts = transform(base_link_frame_id_, map_frame_id_, scan->header.stamp, map_base_link_tf);
     if (ts != OK)
     {
         ROS_ERROR_STREAM_NAMED("localization", "Could not transform to global frame: " << map_frame_id_ << ", from: " << base_link_frame_id_);
         return ts;
     }
-    geo::convert(particle_pose_tf.transform, particle_pose);
+    geo::Transform3 map_base_link;
+    geo::convert(map_base_link_tf.transform, map_base_link);
+    geo::Pose3D particle_pose;
+    geo::convert(pose_msg.pose, particle_pose);
+    particle_pose = map_base_link * particle_pose;
 //    geo::convert(pose_msg.pose, particle_pose); // Assuming the msg is in map frame
 
     //  Get transformation from base_link to laser_frame
@@ -218,7 +221,7 @@ TransformStatus LocalizationLaserTestPlugin::update(const sensor_msgs::LaserScan
 
     visualize(particle_pose_2d, prob);
 
-    ROS_ERROR_STREAM_NAMED("localization", "Pose: " << particle_pose << std::endl << "resulted in " << prob);
+    ROS_INFO_STREAM_NAMED("localization", "Pose: " << particle_pose << std::endl << "resulted in " << prob);
 
     return OK;
 }
@@ -259,11 +262,14 @@ TransformStatus LocalizationLaserTestPlugin::initLaserOffset(const std::string& 
 bool LocalizationLaserTestPlugin::particlePoseProbCallBack(const tue_msgs::PoseProbabilityRequest& req, tue_msgs::PoseProbabilityResponse& res)
 {
     if(!scan_msg_)
+    {
+        ROS_ERROR("No scan msg");
         return false;
+    }
 
-    update(scan_msg_, req.pose, *world_, *req_, res.probability);
+    TransformStatus ts = update(scan_msg_, req.pose, *world_, *req_, res.probability);
     scan_msg_.reset();
-    return true;
+    return (ts==OK);
 }
 
 // ----------------------------------------------------------------------------------------------------
