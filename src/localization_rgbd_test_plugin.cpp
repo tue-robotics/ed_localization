@@ -4,6 +4,7 @@
 #include <ros/names.h>
 #include <ros/node_handle.h>
 #include <ros/subscribe_options.h>
+#include <ros/advertise_service_options.h>
 
 #include <cv_bridge/cv_bridge.h>
 
@@ -126,6 +127,16 @@ void LocalizationRGBDTestPlugin::configure(tue::Configuration config)
         sub_particle_pose_ = nh.subscribe(sub_opts);
     }
 
+    std::string particle_pose_srv;
+    if (config.value("particle_pose_srv", particle_pose_srv, tue::config::OPTIONAL))
+    {
+        // Subscribe to particle pose service
+        ros::AdvertiseServiceOptions srv_opts =
+                ros::AdvertiseServiceOptions::create<tue_msgs::PoseProbability>(
+                    particle_pose_srv, boost::bind(&LocalizationRGBDTestPlugin::particlePoseProbCallBack, this, _1, _2), ros::VoidPtr(), &cb_queue_);
+        srv_particle_pose_prob_ = nh.advertiseService(srv_opts);
+    }
+
     geo::Transform2d initial_pose = getInitialPose(nh, config);
 
     geo::Pose3D initial_pose_3d = initial_pose.projectTo3d();
@@ -148,6 +159,8 @@ void LocalizationRGBDTestPlugin::initialize()
 
 void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::UpdateRequest& req)
 {
+    world_ = &world;
+    req_ = &req;
     cb_queue_.callAvailable();
 
     if (initial_pose_msg_)
@@ -172,7 +185,8 @@ void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::Update
         rgbd::ImagePtr img = rgbd_client_.nextImage();
         if (img)
         {
-            update(img, world, req);
+            double prob;
+            update(img, *particle_pose_msg_, world, req, prob);
         }
         particle_pose_msg_.reset();
     }
@@ -184,25 +198,28 @@ void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::Update
 
 // ----------------------------------------------------------------------------------------------------
 
-TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& img, const ed::WorldModel& world, ed::UpdateRequest& req)
+TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& img, const geometry_msgs::PoseStamped& pose_msg, const ed::WorldModel& world, ed::UpdateRequest& req, double& prob)
 {
     ROS_DEBUG_NAMED("localization", "Updating RGBD");
     auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDTestPlugin::getMaskedImage, this, img);
 
+    geometry_msgs::TransformStamped map_base_link_tf;
+    TransformStatus ts = transform(base_link_frame_id_, map_frame_id_, ros::Time(img->getTimestamp()), map_base_link_tf);
+    if (ts != OK)
+    {
+        ROS_ERROR_STREAM_NAMED("localization", "Could not transform to global frame: " << map_frame_id_ << ", from: " << base_link_frame_id_);
+        return ts;
+    }
+    geo::Transform3 map_base_link;
+    geo::convert(map_base_link_tf.transform, map_base_link);
     geo::Pose3D particle_pose;
-//    geometry_msgs::TransformStamped particle_pose_tf;
-//    TransformStatus ts = transform(base_link_frame_id_, map_frame_id_, ros::Time(img->getTimestamp()), particle_pose_tf);
-//    if (ts != OK)
-//    {
-//        ROS_ERROR_STREAM_NAMED("localization", "Could not transform to global frame: " << map_frame_id_ << ", from: " << base_link_frame_id_);
-//        return ts;
-//    }
-//    geo::convert(particle_pose_tf.transform, particle_pose);
-    geo::convert(particle_pose_msg_->pose, particle_pose); // Assuming the msg is in map frame
+    geo::convert(pose_msg.pose, particle_pose);
+    particle_pose = map_base_link * particle_pose;
+//    geo::convert(pose_msg.pose, particle_pose); // Assuming the msg is in map frame
 
     // Get transformation from base_link to camera frame
     geometry_msgs::TransformStamped base_link_to_camera_tf;
-    TransformStatus ts = transform(base_link_frame_id_, img->getFrameId(), ros::Time(img->getTimestamp()), base_link_to_camera_tf);
+    ts = transform(base_link_frame_id_, img->getFrameId(), ros::Time(img->getTimestamp()), base_link_to_camera_tf);
     if (ts != OK)
     {
         ROS_ERROR("NOT OK");
@@ -235,7 +252,7 @@ TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& im
         return UNKNOWN_ERROR;
     }
 
-    double prob = rgbd_model_.getParticleProp(depth_image, type_image, masked_image->rgbd_image->getDepthImage(), masked_image->mask->image, masked_image->labels);
+    prob = rgbd_model_.getParticleProp(depth_image, type_image, masked_image->rgbd_image->getDepthImage(), masked_image->mask->image, masked_image->labels);
 
     cv::Size size = masked_image->rgbd_image->getRGBImage().size();
 
@@ -253,7 +270,7 @@ TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& im
     cv::imshow("type_image", canvas);
     cv::waitKey(1);
 
-    ROS_ERROR_STREAM_NAMED("localization", "Pose: " << particle_pose << std::endl << "resulted in " << prob);
+    ROS_INFO_STREAM_NAMED("localization", "Pose: " << particle_pose << std::endl << "resulted in " << prob);
 
     return OK;
 }
@@ -278,6 +295,19 @@ const MaskedImageConstPtr LocalizationRGBDTestPlugin::getMaskedImage(const rgbd:
     masked_image->labels = std::move(srv_resp.output_image.labels);
 
     return masked_image;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+bool LocalizationRGBDTestPlugin::particlePoseProbCallBack(const tue_msgs::PoseProbabilityRequest& req, tue_msgs::PoseProbabilityResponse& res)
+{
+
+    rgbd::ImagePtr img = rgbd_client_.nextImage();
+    if (!img)
+        return false;
+
+    TransformStatus ts = update(img, req.pose, *world_, *req_, res.probability);
+    return (ts==OK);
 }
 
 // ----------------------------------------------------------------------------------------------------

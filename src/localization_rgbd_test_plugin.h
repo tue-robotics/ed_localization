@@ -8,8 +8,10 @@
 // ROS
 #include <ros/service_client.h>
 #include <ros/subscriber.h>
+#include <ros/service_server.h>
 
 #include <geometry_msgs/PoseStamped.h>
+#include <tue_msgs/PoseProbability.h>
 
 // RGBD
 #include <rgbd/client.h>
@@ -49,11 +51,13 @@ protected:
     ros::ServiceClient masked_image_srv_client_;
     rgbd::Client rgbd_client_;
     ros::Subscriber sub_particle_pose_;
+    ros::ServiceServer srv_particle_pose_prob_;
 
     const ed_localization::MaskedImageConstPtr getMaskedImage(const rgbd::ImageConstPtr& img);
 
     // Callbacks
     void particlePoseCallBack(const geometry_msgs::PoseStampedConstPtr& msg);
+    bool particlePoseProbCallBack(const tue_msgs::PoseProbabilityRequest& req, tue_msgs::PoseProbabilityResponse& res);
 
     /**
      * @brief
@@ -62,8 +66,10 @@ protected:
      * @param req Update request to be filled
      * @return TransformStatus
      */
-    ed_localization::TransformStatus update(const rgbd::ImageConstPtr& img, const ed::WorldModel& world, ed::UpdateRequest& req);
+    ed_localization::TransformStatus update(const rgbd::ImageConstPtr& img, const geometry_msgs::PoseStamped& pose_msg, const ed::WorldModel& world, ed::UpdateRequest& req, double& prob);
 
+    const ed::WorldModel* world_;
+    ed::UpdateRequest* req_;
 };
 
 #endif
