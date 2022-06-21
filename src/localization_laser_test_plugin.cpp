@@ -192,18 +192,18 @@ TransformStatus LocalizationLaserTestPlugin::update(const sensor_msgs::LaserScan
 {
     ROS_DEBUG_NAMED("localization", "Updating Laser");
 
-    geometry_msgs::TransformStamped map_base_link_tf;
-    TransformStatus ts = transform(base_link_frame_id_, map_frame_id_, scan->header.stamp, map_base_link_tf);
+    geometry_msgs::TransformStamped map_msg_frame_tf;
+    TransformStatus ts = transform(map_frame_id_, pose_msg.header.frame_id, scan->header.stamp, map_msg_frame_tf);
     if (ts != OK)
     {
         ROS_ERROR_STREAM_NAMED("localization", "Could not transform to global frame: " << map_frame_id_ << ", from: " << base_link_frame_id_);
         return ts;
     }
-    geo::Transform3 map_base_link;
-    geo::convert(map_base_link_tf.transform, map_base_link);
+    geo::Transform3 map_msg_frame;
+    geo::convert(map_msg_frame_tf.transform, map_msg_frame);
     geo::Pose3D particle_pose;
     geo::convert(pose_msg.pose, particle_pose);
-    particle_pose = map_base_link * particle_pose;
+    particle_pose = map_msg_frame * particle_pose;
 //    geo::convert(pose_msg.pose, particle_pose); // Assuming the msg is in map frame
 
     //  Get transformation from base_link to laser_frame
