@@ -1,6 +1,6 @@
 # ED Localization
 
-[![CI](https://github.com/tue-robotics/ed_localization/workflows/CI/badge.svg)](https://github.com/tue-robotics/ed_localization/actions)
+[![CI](https://github.com/tue-robotics/ed_localization/actions/workflows/main.yml/badge.svg)](https://github.com/tue-robotics/ed_localization/actions/workflows/main.yml)
 
 A fast particle filter implementation and sensor models for localizing a robot which always take into account the most recent state of the world. This means that if the world representation improves while the robot is running, localization becomes better. The localization module is more efficient and accurate than the well-known [AMCL-module](http://wiki.ros.org/amcl) and *no* separate occupancy grid is needed.
 
