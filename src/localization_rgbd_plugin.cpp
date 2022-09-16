@@ -3,6 +3,7 @@
 
 #include <ros/names.h>
 #include <ros/node_handle.h>
+#include <ros/rate.h>
 #include <ros/subscribe_options.h>
 
 #include <cv_bridge/cv_bridge.h>
@@ -37,6 +38,8 @@ LocalizationRGBDPlugin::LocalizationRGBDPlugin() :
 
 LocalizationRGBDPlugin::~LocalizationRGBDPlugin()
 {
+    nh_.shutdown();
+    publish_map_odom_thread_.join();
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -64,9 +67,7 @@ bool LocalizationRGBDPlugin::configureImpl(tue::Configuration config)
 
     rgbd_client_.initialize(ros::names::resolve(rgbd_topic));
 
-    ros::NodeHandle nh;
-
-    masked_image_srv_client_ = nh.serviceClient<tue_msgs::GetMaskedImage>(masked_image_srv);
+    masked_image_srv_client_ = nh_.serviceClient<tue_msgs::GetMaskedImage>(masked_image_srv);
 
     return true;
 }
@@ -75,6 +76,7 @@ bool LocalizationRGBDPlugin::configureImpl(tue::Configuration config)
 
 void LocalizationRGBDPlugin::initialize()
 {
+    publish_map_odom_thread_ = std::thread(&LocalizationRGBDPlugin::publishMapOdomThreadFunc, this, 10);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -176,14 +178,25 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     // Publish result
     if (latest_map_odom_valid_)
     {
-        publishMapOdom(ros::Time(img->getTimestamp()));
-
         // This should be executed allways. map_odom * odom_base_link
         if (!robot_name_.empty())
             req.setPose(robot_name_, latest_map_odom_ * previous_odom_pose_);
     }
 
     return OK;
+}
+
+void LocalizationRGBDPlugin::publishMapOdomThreadFunc(const float frequency)
+{
+    ros::Rate r(frequency);
+    while(nh_.ok())
+    {
+        if (latest_map_odom_valid_)
+        {
+            publishMapOdom(ros::Time::now());
+        }
+        r.sleep();
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------

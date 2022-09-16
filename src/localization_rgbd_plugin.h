@@ -19,6 +19,7 @@
 
 #include <functional>
 #include <memory>
+#include <thread>
 
 
 class LocalizationRGBDPlugin : public ed_localization::LocalizationPluginBase
@@ -47,6 +48,11 @@ protected:
     // ROS
     ros::ServiceClient masked_image_srv_client_;
     rgbd::Client rgbd_client_;
+
+    ros::NodeHandle nh_;
+    std::thread publish_map_odom_thread_;
+
+    void publishMapOdomThreadFunc(const float frequency);
 
     const ed_localization::MaskedImageConstPtr getMaskedImage(const rgbd::ImageConstPtr& img);
 
