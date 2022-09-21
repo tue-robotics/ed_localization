@@ -91,7 +91,7 @@ bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera&
                     labels.push_back(type);
             }
 
-            assert(("Labels can not be longer than UINT*_MAX", labels.size() < UINT8_MAX));
+            assert((void("Labels can not be longer than UINT*_MAX"), labels.size() < UINT8_MAX));
 
             // Set the value to be set
             res.setType(index);
