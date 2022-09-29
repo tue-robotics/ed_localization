@@ -77,7 +77,7 @@ LocalizationPlugin::~LocalizationPlugin()
         nh.setParam("initial_pose/y", ts.transform.translation.y);
         nh.setParam("initial_pose/yaw", rotation_map_odom.getAngle());
     }
-    catch (tf2::TransformException ex)
+    catch (const tf2::TransformException& ex)
     {
         ROS_ERROR_STREAM_NAMED("Localization", ex.what());
     }
@@ -166,7 +166,7 @@ geo::Transform2d LocalizationPlugin::getInitialPose(const ros::NodeHandle& nh, t
     {
         return tryGetInitialPoseFromParamServer(nh);
     }
-    catch (ConfigurationException)
+    catch (const ConfigurationException&)
     {
     }
 
@@ -174,7 +174,7 @@ geo::Transform2d LocalizationPlugin::getInitialPose(const ros::NodeHandle& nh, t
     {
         return tryGetInitialPoseFromConfig(config);
     }
-    catch(ConfigurationException)
+    catch (const ConfigurationException&)
     {
     }
 
@@ -228,7 +228,7 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
         );
         return result;
     }
-    catch (tf2::TransformException ex)
+    catch (const tf2::TransformException& ex)
     {
         std::string msg = std::string(ex.what());
         ROS_ERROR_STREAM_NAMED("Localization", msg);
@@ -517,7 +517,7 @@ TransformStatus LocalizationPlugin::transform(const std::string& target_frame, c
         tf2::convert(ts, transform);
         return OK;
     }
-    catch(tf2::ExtrapolationException& ex)
+    catch (const tf2::ExtrapolationException& ex)
     {
         try
         {
@@ -536,12 +536,12 @@ TransformStatus LocalizationPlugin::transform(const std::string& target_frame, c
                 return TOO_OLD;
             }
         }
-        catch(tf2::TransformException& exc)
+        catch (const tf2::TransformException& exc)
         {
             return UNKNOWN_ERROR;
         }
     }
-    catch(tf2::TransformException& ex)
+    catch (const tf2::TransformException& ex)
     {
         return UNKNOWN_ERROR;
     }
