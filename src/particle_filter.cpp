@@ -27,7 +27,7 @@ void ParticleFilter::configure(tue::Configuration config)
 {
     // Extra variable needed as tue::Configuration doesn't support
     // unisgned interters
-    int min, max;
+    int min = 0, max = 0;
     config.value("min_particles", min);
     config.value("max_particles", max);
     min_samples_ = min;
