@@ -77,9 +77,9 @@ public:
 
     void normalize(bool update_filter=false);
 
-    inline const unsigned int getMinSamples() { return min_samples_; }
+    inline unsigned int getMinSamples() { return min_samples_; }
 
-    inline const unsigned int getMaxSamples() { return max_samples_; }
+    inline unsigned int getMaxSamples() { return max_samples_; }
 
 private:
 
