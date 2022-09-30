@@ -27,7 +27,7 @@ void ParticleFilter::configure(tue::Configuration config)
 {
     // Extra variable needed as tue::Configuration doesn't support
     // unisgned interters
-    int min, max;
+    int min = 0, max = 0;
     config.value("min_particles", min);
     config.value("max_particles", max);
     min_samples_ = min;
@@ -304,7 +304,6 @@ void ParticleFilter::computeClusterStats() const
 
     // Initialize overall filter stats
     double weight = 0;
-    unsigned int count = 0;
 
     // Workspace
     std::array<double, 4> m{ {0, 0, 0, 0} };
@@ -324,7 +323,6 @@ void ParticleFilter::computeClusterStats() const
         Cluster& cluster = cluster_cache_[cidx];
 
         cluster.count += 1;
-        count += 1;
         cluster.weight += sample.weight;
         weight += sample.weight;
 

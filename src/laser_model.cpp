@@ -80,7 +80,9 @@ LaserModel::~LaserModel()
 
 void LaserModel::configure(tue::Configuration config)
 {
-    config.value("num_beams", num_beams);
+    int temp_num_beams = 0;
+    config.value("num_beams", temp_num_beams);
+    num_beams = temp_num_beams;
 
     config.value("z_hit", z_hit);
     config.value("sigma_hit", sigma_hit);
@@ -174,9 +176,9 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     if (num_beams <= 0)
         num_beams = scan.ranges.size();
     else
-        num_beams = std::min<int>(scan.ranges.size(), num_beams);
+        num_beams = std::min<uint>(scan.ranges.size(), num_beams);
 
-    int i_step = scan.ranges.size() / num_beams;
+    uint i_step = scan.ranges.size() / num_beams;
     sensor_ranges_.clear();
     for (unsigned int i = 0; i < scan.ranges.size(); i += i_step)
     {

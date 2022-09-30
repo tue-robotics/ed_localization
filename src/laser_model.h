@@ -52,7 +52,7 @@ private:
     geo::Transform2 laser_offset_;
     bool laser_upside_down_;
 
-    int num_beams;
+    uint num_beams;
 
     double min_particle_distance_;
     double min_particle_rotation_distance_;
