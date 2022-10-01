@@ -61,7 +61,7 @@ LocalizationPluginBase::~LocalizationPluginBase()
         nh.setParam("initial_pose/y", ts.transform.translation.y);
         nh.setParam("initial_pose/yaw", rotation_map_odom.getAngle());
     }
-    catch (tf2::TransformException ex)
+    catch (const tf2::TransformException& ex)
     {
         ROS_ERROR_STREAM_NAMED("localization", ex.what());
     }
