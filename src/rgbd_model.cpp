@@ -69,7 +69,7 @@ bool generateWMImages(const ed::WorldModel& world_model, const geo::DepthCamera&
     for(ed::WorldModel::const_iterator it = world_model.begin(); it != world_model.end(); ++it)
     {
         const ed::EntityConstPtr& e = *it;
-        const std::string& id = e->id().str();
+//        const std::string& id = e->id().str();
 
         if (e->shape() && e->has_pose() && !e->hasFlag("self"))
         {
@@ -289,7 +289,8 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
 
         const geo::Pose3D cam_pose = sample.projectTo3d() * base_link_to_cam;
 
-        bool success = generateWMImages(world, cam_, cam_pose.inverse(), depth_image, type_image, labels_);
+//        bool success = generateWMImages(world, cam_, cam_pose.inverse(), depth_image, type_image, labels_);
+        generateWMImages(world, cam_, cam_pose.inverse(), depth_image, type_image, labels_);
     }
     timer.stop();
     ros::Time end = ros::Time::now();
@@ -306,7 +307,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
         }
     }
 
-    const cv::Mat& sensor_depth_image = masked_image->rgbd_image->getDepthImage();
+//    const cv::Mat& sensor_depth_image = masked_image->rgbd_image->getDepthImage();
     const cv::Mat& sensor_type_image = masked_image->mask->image;
     const std::vector<std::string>& sensor_labels = masked_image->labels;
 
@@ -321,7 +322,7 @@ bool RGBDModel::updateWeights(const ed::WorldModel& world, std::future<const Mas
 
     for (uint sample_i = 0; sample_i < unique_samples.size(); ++sample_i)
     {
-        const cv::Mat& depth_image = depth_images[sample_i];
+//        const cv::Mat& depth_image = depth_images[sample_i];
         const cv::Mat& type_image = type_images[sample_i];
 //        weight_updates[sample_i] = getParticleProp(depth_image, type_image, sensor_depth_image, sensor_type_image, sensor_labels);
 
