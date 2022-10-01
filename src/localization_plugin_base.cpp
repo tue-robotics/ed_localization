@@ -133,7 +133,7 @@ void LocalizationPluginBase::configure(tue::Configuration config)
 
 // ----------------------------------------------------------------------------------------------------
 
-bool LocalizationPluginBase::configureImpl(tue::Configuration config)
+bool LocalizationPluginBase::configureImpl(tue::Configuration /*config*/)
 {
     return true;
 }
@@ -265,7 +265,7 @@ void LocalizationPluginBase::process(const ed::WorldModel& world, ed::UpdateRequ
 
 // ----------------------------------------------------------------------------------------------------
 
-void LocalizationPluginBase::processImpl(const ed::WorldModel& world, ed::UpdateRequest& req)
+void LocalizationPluginBase::processImpl(const ed::WorldModel& /*world*/, ed::UpdateRequest& /*req*/)
 {
 }
 

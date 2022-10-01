@@ -188,7 +188,7 @@ void LocalizationLaserTestPlugin::process(const ed::WorldModel& world, ed::Updat
 
 // ----------------------------------------------------------------------------------------------------
 
-TransformStatus LocalizationLaserTestPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const geometry_msgs::PoseStamped& pose_msg, const ed::WorldModel& world, ed::UpdateRequest& req, double& prob)
+TransformStatus LocalizationLaserTestPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const geometry_msgs::PoseStamped& pose_msg, const ed::WorldModel& world, ed::UpdateRequest& /*req*/, double& prob)
 {
     ROS_DEBUG_NAMED("localization", "Updating Laser");
 

@@ -40,7 +40,7 @@ public:
 
     inline void setType(const unsigned int type) { type_ = type; }
 
-    void renderPixel(int x, int y, float depth, int i_triangle)
+    void renderPixel(int x, int y, float depth, int /*i_triangle*/)
     {
         const float& old_depth = depth_image_.at<float>(y, x);
         if (old_depth <= 0 || depth < old_depth)
@@ -440,7 +440,7 @@ bool RGBDModel::generateWMImage(const ed::WorldModel& world, const MaskedImageCo
 
 // ----------------------------------------------------------------------------------------------------
 
-double RGBDModel::getParticleProp(const cv::Mat& depth_image, const cv::Mat& type_image, const cv::Mat& sensor_depth_image, const cv::Mat& sensor_type_image, const std::vector<std::string>& sensor_labels)
+double RGBDModel::getParticleProp(const cv::Mat& /*depth_image*/, const cv::Mat& type_image, const cv::Mat& /*sensor_depth_image*/, const cv::Mat& sensor_type_image, const std::vector<std::string>& sensor_labels)
 {
     double p = 1;
 

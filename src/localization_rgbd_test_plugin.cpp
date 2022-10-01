@@ -198,7 +198,7 @@ void LocalizationRGBDTestPlugin::process(const ed::WorldModel& world, ed::Update
 
 // ----------------------------------------------------------------------------------------------------
 
-TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& img, const geometry_msgs::PoseStamped& pose_msg, const ed::WorldModel& world, ed::UpdateRequest& req, double& prob)
+TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& img, const geometry_msgs::PoseStamped& pose_msg, const ed::WorldModel& world, ed::UpdateRequest& /*req*/, double& prob)
 {
     ROS_DEBUG_NAMED("localization", "Updating RGBD");
     auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDTestPlugin::getMaskedImage, this, img);
