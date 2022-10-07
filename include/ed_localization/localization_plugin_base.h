@@ -170,7 +170,6 @@ protected:
     bool resample(const ed::WorldModel& world);
 
     void publishParticles(const ros::Time& stamp);
-    uint old_msg_size_;
 
     void updateMapOdom(const geo::Pose3D& odom_to_base_link);
 
