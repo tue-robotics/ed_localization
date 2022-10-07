@@ -24,7 +24,6 @@
   <build_depend>tf2_geometry_msgs</build_depend>
   <build_depend>tf2_ros</build_depend>
   <build_depend>tue_msgs</build_depend>
-  <build_depend>visualization_msgs</build_depend>
 
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>ed</exec_depend>
@@ -35,7 +34,6 @@
   <exec_depend>tf2_geometry_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>tue_msgs</exec_depend>
-  <exec_depend>visualization_msgs</exec_depend>
 
   <doc_depend>doxygen</doc_depend>
 

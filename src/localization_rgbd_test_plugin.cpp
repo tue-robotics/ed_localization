@@ -28,8 +28,6 @@
 
 #include <tue_msgs/GetMaskedImage.h>
 
-#include <visualization_msgs/MarkerArray.h>
-
 #include <future>
 #include <math.h>
 

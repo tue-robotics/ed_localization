@@ -14,13 +14,12 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_geometry_msgs
   tf2_ros
   tue_msgs
-  visualization_msgs
 )
 
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES ed_localization_pf ed_localization_odom ed_localization_laser ed_localization_plugin ed_localization_tf_plugin
-  CATKIN_DEPENDS ed geometry_msgs rgbd sensor_msgs tf2 tf2_geometry_msgs tf2_ros tue_msgs visualization_msgs
+  LIBRARIES ed_localization_pf ed_localization_odom ed_localization_laser ed_localization_plugin_base ed_localization_plugin ed_localization_tf_plugin
+  CATKIN_DEPENDS ed geometry_msgs rgbd sensor_msgs tf2 tf2_geometry_msgs tf2_ros tue_msgs
   DEPENDS
 )
 
@@ -81,7 +80,7 @@ add_library(ed_localization_rgbd_plugin
   src/localization_rgbd_plugin.cpp
   src/localization_rgbd_plugin.h
 )
-target_link_libraries(ed_localization_rgbd_plugin ed_localization_pf ed_localization_odom ed_localization_rgbd ${catkin_LIBRARIES})
+target_link_libraries(ed_localization_rgbd_plugin ed_localization_plugin_base ed_localization_rgbd ${catkin_LIBRARIES})
 add_dependencies(ed_localization_rgbd_plugin ${catkin_EXPORTED_TARGETS})
 
 add_library(ed_localization_rgbd_test_plugin

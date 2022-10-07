@@ -186,6 +186,8 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     return OK;
 }
 
+// ----------------------------------------------------------------------------------------------------
+
 void LocalizationRGBDPlugin::publishMapOdomThreadFunc(const float frequency)
 {
     ros::Rate r(frequency);
