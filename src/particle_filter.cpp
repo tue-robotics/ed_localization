@@ -440,7 +440,7 @@ bool ParticleFilter::writeCSV(std::string file_name)
     const static std::string home_dir = getenv("HOME");
     const static std::string file_dir = tue::filesystem::Path(home_dir).join("ros").join("data").join("ed_localization").join(current_date_time).string();
 
-    if (!boost::filesystem::create_directories(file_dir))
+    if (!boost::filesystem::create_directories(file_dir) && !boost::filesystem::is_directory(file_dir))
     {
         ROS_ERROR_STREAM_NAMED("pf", "Could not create directory: '" << file_dir << "'");
         return false;
