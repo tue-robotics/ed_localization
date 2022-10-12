@@ -95,11 +95,22 @@ void LocalizationRGBDPlugin::processImpl(const ed::WorldModel& world, ed::Update
 
 TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, const ed::WorldModel& world, ed::UpdateRequest& req)
 {
+    uint step_counter = 0;
     // Check if particle filter is initialized
     if (particle_filter_.samples().empty())
     {
         ROS_ERROR_NAMED("localization", "(update) Empty particle filter");
         return UNKNOWN_ERROR;
+    }
+
+    if (write_csv_)
+    {
+        std::string csv_file_name;
+        csv_file_name.append(std::to_string(loop_counter_));
+        csv_file_name.append("-loop_start-");
+        csv_file_name.append(std::to_string(step_counter++));
+        csv_file_name.append(".csv");
+        particle_filter_.writeCSV(csv_file_name);
     }
 
     auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDPlugin::getMaskedImage, this, img);
@@ -149,6 +160,15 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     {
         // Update motion
         odom_model_.updatePoses(movement, particle_filter_);
+        if (write_csv_)
+        {
+            std::string csv_file_name;
+            csv_file_name.append(std::to_string(loop_counter_));
+            csv_file_name.append("-odom_update-");
+            csv_file_name.append(std::to_string(step_counter++));
+            csv_file_name.append(".csv");
+            particle_filter_.writeCSV(csv_file_name);
+        }
     }
 
     bool resampled = false;
@@ -160,11 +180,30 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
         if (!success)
             return UNKNOWN_ERROR;
 
+        if (write_csv_)
+        {
+            std::string csv_file_name;
+            csv_file_name.append(std::to_string(loop_counter_));
+            csv_file_name.append("-rgbd_update-");
+            csv_file_name.append(std::to_string(step_counter++));
+            csv_file_name.append(".csv");
+            particle_filter_.writeCSV(csv_file_name);
+        }
+
         previous_odom_pose_ = odom_to_base_link;
         have_previous_odom_pose_ = true;
 
         // (Re)sample
         resampled = resample(world);
+        if (resampled && write_csv_)
+        {
+            std::string csv_file_name;
+            csv_file_name.append(std::to_string(loop_counter_));
+            csv_file_name.append("-resampled-");
+            csv_file_name.append(std::to_string(step_counter++));
+            csv_file_name.append(".csv");
+            particle_filter_.writeCSV(csv_file_name);
+        }
 
         // Publish particles
         publishParticles(ros::Time(img->getTimestamp()));
