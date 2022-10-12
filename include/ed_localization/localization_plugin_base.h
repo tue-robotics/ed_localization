@@ -114,6 +114,9 @@ protected:
     double update_min_d_sq_;
     double update_min_a_;
 
+    bool write_csv_;
+    uint loop_counter_;
+
     // PARTICLE FILTER
     ParticleFilter particle_filter_;
 

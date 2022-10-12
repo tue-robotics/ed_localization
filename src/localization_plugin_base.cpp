@@ -33,6 +33,8 @@ LocalizationPluginBase::LocalizationPluginBase() :
     resample_count_(0),
     update_min_d_sq_(0),
     update_min_a_(0),
+    write_csv_(false),
+    loop_counter_(0),
     have_previous_odom_pose_(false),
     latest_map_odom_valid_(false),
     last_map_size_revision_(0),
@@ -81,6 +83,8 @@ void LocalizationPluginBase::configure(tue::Configuration config)
     config.value("update_min_d", update_min_d);
     update_min_d_sq_ = update_min_d * update_min_d;
     config.value("update_min_a", update_min_a_);
+
+    config.value("write_csv", write_csv_, tue::config::OPTIONAL);
 
     if (config.readGroup("odom_model", tue::config::REQUIRED))
     {
@@ -259,6 +263,7 @@ void LocalizationPluginBase::process(const ed::WorldModel& world, ed::UpdateRequ
     }
 
     processImpl(world, req);
+    ++loop_counter_;
 }
 
 // ----------------------------------------------------------------------------------------------------
