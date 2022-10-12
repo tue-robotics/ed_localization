@@ -81,6 +81,8 @@ public:
 
     inline unsigned int getMaxSamples() { return max_samples_; }
 
+    bool writeCSV(std::string file_name);
+
 private:
 
     unsigned int min_samples_, max_samples_;

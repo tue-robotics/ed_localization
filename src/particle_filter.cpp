@@ -1,11 +1,36 @@
 #include "ed_localization/particle_filter.h"
 
-#include <algorithm>
-#include <cmath>
+#include <boost/filesystem.hpp>
 
 #include <ros/console.h>
 
+#include <tue/filesystem/path.h>
+
+#include <algorithm>
+#include <cmath>
+#include <exception>
+#include <fstream>
+#include <time.h>
+
 namespace ed_localization {
+
+/**
+ * @brief Get current date/time, format is YYYY-MM-DD-HH-mm-ss
+ * @return
+ */
+std::string currentDateTime()
+{
+    time_t     now = time(0);
+    struct tm  tstruct;
+    char       buf[80];
+    tstruct = *localtime(&now);
+
+    // Visit https://en.cppreference.com/w/cpp/chrono/c/strftime
+    // for more information about date/time format
+    strftime(buf, sizeof(buf), "%Y-%m-%d-%H-%M-%S", &tstruct);
+
+    return buf;
+}
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -405,6 +430,47 @@ void ParticleFilter::setUniformWeights()
     double uni_weight = 1.0 / samples().size();
     for(std::vector<Sample>::iterator it = samples().begin(); it != samples().end(); ++it)
         it->weight = uni_weight;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+bool ParticleFilter::writeCSV(std::string file_name)
+{
+    const static std::string current_date_time = currentDateTime();
+    const static std::string home_dir = getenv("HOME");
+    const static std::string file_dir = tue::filesystem::Path(home_dir).join("ros").join("data").join("ed_localization").join(current_date_time).string();
+
+    if (!boost::filesystem::create_directories(file_dir))
+    {
+        ROS_ERROR_STREAM_NAMED("pf", "Could not create directory: '" << file_dir << "'");
+        return false;
+    }
+
+    if (file_name.size() < 4 || file_name.substr(file_name.size()-4, 4) != ".csv")
+        file_name.append(".csv");
+
+    const std::string file_path = tue::filesystem::Path(file_dir).join(file_name).string();
+
+    std::ofstream file(file_path);
+    file << "x,y,theta,weight" << std::endl;
+
+    try
+    {
+        for (const auto& sample : samples())
+        {
+            file << sample.pose.t.x << "," << sample.pose.t.y << "," << sample.pose.rotation() << "," << sample.weight << std::endl;
+        }
+    }
+    catch (const std::exception& ex)
+    {
+        ROS_ERROR_STREAM_NAMED("pf", "Could not write all the samples to file '" << file_path << "': " << ex.what());
+        file.close();
+        return false;
+    }
+
+    file.close();
+
+    return true;
 }
 
 }

@@ -13,20 +13,24 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_geometry_msgs
   tf2_ros
+  tue_filesystem
   tue_msgs
 )
+
+find_package(Boost REQUIRED COMPONENTS filesystem)
 
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ed_localization_pf ed_localization_odom ed_localization_laser ed_localization_plugin_base ed_localization_plugin ed_localization_tf_plugin
   CATKIN_DEPENDS ed geometry_msgs rgbd sensor_msgs tf2 tf2_geometry_msgs tf2_ros tue_msgs
-  DEPENDS
+  DEPENDS Boost
 )
 
 include_directories(
   include
   SYSTEM
   ${catkin_INCLUDE_DIRS}
+  ${Boost_INCLUDE_DIRS}
 )
 
 add_library(ed_localization_pf
@@ -35,7 +39,8 @@ add_library(ed_localization_pf
   src/particle_filter.cpp
   include/ed_localization/particle_filter.h
 )
-target_link_libraries(ed_localization_pf ${catkin_LIBRARIES})
+target_compile_definitions(ed_localization_pf PRIVATE BOOST_FILESYSTEM_NO_DEPRECATED)
+target_link_libraries(ed_localization_pf ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 
 add_library(ed_localization_odom
   src/odom_model.cpp

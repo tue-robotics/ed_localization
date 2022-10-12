@@ -18,21 +18,25 @@
   <build_depend>cv_bridge</build_depend>
   <build_depend>ed</build_depend>
   <build_depend>geometry_msgs</build_depend>
+  <build_depend>libboost-filesystem-dev</build_depend>
   <build_depend>rgbd</build_depend>
   <build_depend>sensor_msgs</build_depend>
   <build_depend>tf2</build_depend>
   <build_depend>tf2_geometry_msgs</build_depend>
   <build_depend>tf2_ros</build_depend>
+  <build_depend>tue_filesystem</build_depend>
   <build_depend>tue_msgs</build_depend>
 
   <exec_depend>cv_bridge</exec_depend>
   <exec_depend>ed</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>libboost-filesystem-dev</exec_depend>
   <exec_depend>rgbd</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>tf2</exec_depend>
   <exec_depend>tf2_geometry_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>tue_filesystem</exec_depend>
   <exec_depend>tue_msgs</exec_depend>
 
   <doc_depend>doxygen</doc_depend>
