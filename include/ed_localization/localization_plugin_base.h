@@ -26,6 +26,9 @@
 #include <functional>
 #include <memory>
 
+#include <sstream>
+#include <iomanip>
+
 namespace tf2_ros {
     class TransformListener;
     class TransformBroadcaster;
@@ -182,6 +185,13 @@ protected:
                               const ros::Time& time, geometry_msgs::TransformStamped& transform);
 
 };
+
+std::string uint_to_string(uint number, uint size)
+{
+    std::stringstream ss;
+    ss << std::setw(size) << std::setfill('0') << number;
+    return ss.str();
+}
 
 } // END NS ed_localization
 
