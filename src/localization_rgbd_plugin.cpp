@@ -106,9 +106,9 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
     if (write_csv_)
     {
         std::string csv_file_name;
-        csv_file_name.append(std::to_string(loop_counter_));
+        csv_file_name.append(uint_to_string(loop_counter_,  4));
         csv_file_name.append("-loop_start-");
-        csv_file_name.append(std::to_string(step_counter++));
+        csv_file_name.append(uint_to_string(step_counter++, 2));
         csv_file_name.append(".csv");
         particle_filter_.writeCSV(csv_file_name);
     }
@@ -163,9 +163,9 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
         if (write_csv_)
         {
             std::string csv_file_name;
-            csv_file_name.append(std::to_string(loop_counter_));
+            csv_file_name.append(uint_to_string(loop_counter_,  4));
             csv_file_name.append("-odom_update-");
-            csv_file_name.append(std::to_string(step_counter++));
+            csv_file_name.append(uint_to_string(step_counter++, 2));
             csv_file_name.append(".csv");
             particle_filter_.writeCSV(csv_file_name);
         }
@@ -183,9 +183,9 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
         if (write_csv_)
         {
             std::string csv_file_name;
-            csv_file_name.append(std::to_string(loop_counter_));
+            csv_file_name.append(uint_to_string(loop_counter_,  4));
             csv_file_name.append("-rgbd_update-");
-            csv_file_name.append(std::to_string(step_counter++));
+            csv_file_name.append(uint_to_string(step_counter++, 2));
             csv_file_name.append(".csv");
             particle_filter_.writeCSV(csv_file_name);
         }
@@ -198,9 +198,9 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
         if (resampled && write_csv_)
         {
             std::string csv_file_name;
-            csv_file_name.append(std::to_string(loop_counter_));
+            csv_file_name.append(uint_to_string(loop_counter_,  4));
             csv_file_name.append("-resampled-");
-            csv_file_name.append(std::to_string(step_counter++));
+            csv_file_name.append(uint_to_string(step_counter++, 2));
             csv_file_name.append(".csv");
             particle_filter_.writeCSV(csv_file_name);
         }
