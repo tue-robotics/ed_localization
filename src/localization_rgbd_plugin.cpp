@@ -39,7 +39,8 @@ LocalizationRGBDPlugin::LocalizationRGBDPlugin() :
 LocalizationRGBDPlugin::~LocalizationRGBDPlugin()
 {
     nh_.shutdown();
-    publish_map_odom_thread_.join();
+    if (publish_map_odom_thread_.joinable())
+        publish_map_odom_thread_.join();
 }
 
 // ----------------------------------------------------------------------------------------------------
