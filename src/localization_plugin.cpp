@@ -121,8 +121,9 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     {
         std::string csv_file_name;
         csv_file_name.append(uint_to_string(loop_counter_, 4));
-        csv_file_name.append("-loop_start-");
+        csv_file_name.append("-");
         csv_file_name.append(uint_to_string(step_counter++,  2));
+        csv_file_name.append("-loop_start");
         csv_file_name.append(".csv");
         particle_filter_.writeCSV(csv_file_name);
     }
@@ -143,8 +144,9 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         {
             std::string csv_file_name;
             csv_file_name.append(uint_to_string(loop_counter_, 4));
-            csv_file_name.append("-odom_update-");
+            csv_file_name.append("-");
             csv_file_name.append(uint_to_string(step_counter++, 2));
+            csv_file_name.append("-odom_update");
             csv_file_name.append(".csv");
             particle_filter_.writeCSV(csv_file_name);
         }
@@ -160,8 +162,9 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         {
             std::string csv_file_name;
             csv_file_name.append(uint_to_string(loop_counter_, 4));
-            csv_file_name.append("-laser_update-");
+            csv_file_name.append("-");
             csv_file_name.append(uint_to_string(step_counter++, 2));
+            csv_file_name.append("-laser_update");
             csv_file_name.append(".csv");
             particle_filter_.writeCSV(csv_file_name);
         }
@@ -175,8 +178,9 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         {
             std::string csv_file_name;
             csv_file_name.append(uint_to_string(loop_counter_, 4));
-            csv_file_name.append("-resampled-");
+            csv_file_name.append("-");
             csv_file_name.append(uint_to_string(step_counter++, 2));
+            csv_file_name.append("-resampled");
             csv_file_name.append(".csv");
             particle_filter_.writeCSV(csv_file_name);
         }
