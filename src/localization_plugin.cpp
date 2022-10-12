@@ -81,6 +81,7 @@ void LocalizationPlugin::processImpl(const ed::WorldModel& world, ed::UpdateRequ
 
 TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr& scan, const ed::WorldModel& world, ed::UpdateRequest& req)
 {
+    uint step_counter = 0;
     //  Get transformation from base_link to laser_frame
     if (!laser_offset_initialized_)
     {
@@ -89,12 +90,21 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
             return ts;
     }
 
-
     // Check if particle filter is initialized
     if (particle_filter_.samples().empty())
     {
         ROS_ERROR_NAMED("localization", "(update) Empty particle filter");
         return UNKNOWN_ERROR;
+    }
+
+    if (write_csv_)
+    {
+        std::string csv_file_name;
+        csv_file_name.append(std::to_string(loop_counter_));
+        csv_file_name.append("-loop_start-");
+        csv_file_name.append(std::to_string(step_counter++));
+        csv_file_name.append(".csv");
+        particle_filter_.writeCSV(csv_file_name);
     }
 
 
@@ -130,6 +140,15 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     {
         // Update motion
         odom_model_.updatePoses(movement, particle_filter_);
+        if (write_csv_)
+        {
+            std::string csv_file_name;
+            csv_file_name.append(std::to_string(loop_counter_));
+            csv_file_name.append("-odom_update-");
+            csv_file_name.append(std::to_string(step_counter++));
+            csv_file_name.append(".csv");
+            particle_filter_.writeCSV(csv_file_name);
+        }
     }
 
     bool resampled = false;
@@ -138,12 +157,30 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         ROS_DEBUG_NAMED("localization", "Updating laser");
         // Update sensor
         laser_model_.updateWeights(world, *scan, particle_filter_);
+        if (write_csv_)
+        {
+            std::string csv_file_name;
+            csv_file_name.append(std::to_string(loop_counter_));
+            csv_file_name.append("-laser_update-");
+            csv_file_name.append(std::to_string(step_counter++));
+            csv_file_name.append(".csv");
+            particle_filter_.writeCSV(csv_file_name);
+        }
 
         previous_odom_pose_ = odom_to_base_link;
         have_previous_odom_pose_ = true;
 
         // (Re)sample
         resampled = resample(world);
+        if (resampled && write_csv_)
+        {
+            std::string csv_file_name;
+            csv_file_name.append(std::to_string(loop_counter_));
+            csv_file_name.append("-resampled-");
+            csv_file_name.append(std::to_string(step_counter++));
+            csv_file_name.append(".csv");
+            particle_filter_.writeCSV(csv_file_name);
+        }
 
         // Publish particles
         publishParticles(scan->header.stamp);
