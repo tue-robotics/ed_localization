@@ -436,6 +436,7 @@ void ParticleFilter::setUniformWeights()
 
 bool ParticleFilter::writeCSV(std::string file_name)
 {
+    ROS_DEBUG_NAMED("pf", "ParticleFilter::writeCSV");
     const static std::string current_date_time = currentDateTime();
     const static std::string home_dir = getenv("HOME");
     const static std::string file_dir = tue::filesystem::Path(home_dir).join("ros").join("data").join("ed_localization").join(current_date_time).string();
@@ -465,11 +466,12 @@ bool ParticleFilter::writeCSV(std::string file_name)
     {
         ROS_ERROR_STREAM_NAMED("pf", "Could not write all the samples to file '" << file_path << "': " << ex.what());
         file.close();
+        ROS_DEBUG_NAMED("pf", "ParticleFilter::writeCSV done with failure");
         return false;
     }
 
     file.close();
-
+    ROS_DEBUG_NAMED("pf", "ParticleFilter::writeCSV done");
     return true;
 }
 
