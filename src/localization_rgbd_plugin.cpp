@@ -103,16 +103,6 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
         return UNKNOWN_ERROR;
     }
 
-    if (write_csv_)
-    {
-        std::string csv_file_name;
-        csv_file_name.append(uint_to_string(loop_counter_,  4));
-        csv_file_name.append("-loop_start-");
-        csv_file_name.append(uint_to_string(step_counter++, 2));
-        csv_file_name.append(".csv");
-        particle_filter_.writeCSV(csv_file_name);
-    }
-
     auto masked_image_future = std::async(std::launch::async, &LocalizationRGBDPlugin::getMaskedImage, this, img);
 
     // Get transformation from base_link to camera frame
@@ -146,6 +136,16 @@ TransformStatus LocalizationRGBDPlugin::update(const rgbd::ImageConstPtr& img, c
         movement = (previous_odom_pose_.inverse() * odom_to_base_link).projectTo2d();
 
         update = movement.t.x*movement.t.x + movement.t.y*movement.t.y >= update_min_d_sq_ || std::abs(movement.rotation()) >= update_min_a_;
+    }
+
+    if (write_csv_)
+    {
+        std::string csv_file_name;
+        csv_file_name.append(uint_to_string(loop_counter_,  4));
+        csv_file_name.append("-loop_start-");
+        csv_file_name.append(uint_to_string(step_counter++, 2));
+        csv_file_name.append(".csv");
+        particle_filter_.writeCSV(csv_file_name);
     }
 
     bool force_publication = false;
