@@ -10,6 +10,7 @@
 #include <cmath>
 #include <exception>
 #include <fstream>
+#include <sstream>
 #include <time.h>
 
 namespace ed_localization {
@@ -452,15 +453,18 @@ bool ParticleFilter::writeCSV(std::string file_name)
 
     const std::string file_path = tue::filesystem::Path(file_dir).join(file_name).string();
 
-    std::ofstream file(file_path);
-    file << "x,y,theta,weight" << std::endl;
+    std::stringstream ss;
+    ss << "x,y,theta,weight" << std::endl;
 
+    for (const auto& sample : samples())
+    {
+        ss << sample.pose.t.x << "," << sample.pose.t.y << "," << sample.pose.rotation() << "," << sample.weight << std::endl;
+    }
+
+    std::ofstream file(file_path);
     try
     {
-        for (const auto& sample : samples())
-        {
-            file << sample.pose.t.x << "," << sample.pose.t.y << "," << sample.pose.rotation() << "," << sample.weight << std::endl;
-        }
+        file << ss.rdbuf();
     }
     catch (const std::exception& ex)
     {
