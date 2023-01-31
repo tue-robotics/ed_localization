@@ -11,6 +11,7 @@
 #include <exception>
 #include <fstream>
 #include <sstream>
+#include <string>
 #include <time.h>
 
 namespace ed_localization {
@@ -476,6 +477,54 @@ bool ParticleFilter::writeCSV(std::string file_name)
 
     file.close();
     ROS_DEBUG_NAMED("pf", "ParticleFilter::writeCSV done");
+    return true;
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+bool ParticleFilter::loadCSV(const std::string& file_name)
+{
+    ROS_DEBUG_STREAM_NAMED("pf", "ParticleFilter::loadCSV: " << file_name);
+
+    tue::filesystem::Path file_path(file_name);
+    if (!file_path.isRegularFile())
+    {
+        ROS_ERROR_STREAM_NAMED("pf", "CSV file '" << file_name << "' doesn't exist");
+        return false;
+    }
+
+    std::ifstream file (file_name);
+    if(!file.is_open())
+    {
+        ROS_ERROR_STREAM_NAMED("pf", "Could not open the CSV file '" << file_name << "'");
+        return false;
+    }
+
+    clearCache();
+
+    std::vector<double> row;
+    row.reserve(4);
+    std::string line, word;
+
+    std::vector<Sample>& smpls = samples();
+    kd_tree_->clear();
+
+    while(getline(file, line))
+    {
+        row.clear();
+        std::stringstream str(line);
+        while(std::getline(str, word, ','))
+            row.push_back(std::stod(word));
+
+        if (row.size() != 4)
+        {
+            ROS_ERROR_STREAM_NAMED("pf", "line '" << line << "' did not result in 4 values");
+            continue;
+        }
+        smpls.push_back(Sample(geo::Transform2(row[0], row[1], row[2]), row[3]));
+        kd_tree_->insert(smpls.back().pose, smpls.back().weight);
+    }
+
     return true;
 }
 

@@ -83,6 +83,8 @@ public:
 
     bool writeCSV(std::string file_name);
 
+    bool loadCSV(const std::string& file_name);
+
 private:
 
     unsigned int min_samples_, max_samples_;
