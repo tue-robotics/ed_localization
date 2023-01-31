@@ -101,3 +101,6 @@ add_library(ed_localization_tf_plugin
 )
 target_link_libraries(ed_localization_tf_plugin ${catkin_LIBRARIES})
 add_dependencies(ed_localization_tf_plugin ${catkin_EXPORTED_TARGETS})
+
+add_executable(particles_analyzer tools/particles_analyzer.cpp)
+target_link_libraries(particles_analyzer ed_localization_pf ${catkin_LIBRARIES})
