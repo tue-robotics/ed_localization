@@ -7,12 +7,15 @@ add_compile_options(-Wextra -Werror=extra)
 find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   ed
+  geolib2
   geometry_msgs
   rgbd
+  roscpp
   sensor_msgs
   tf2
   tf2_geometry_msgs
   tf2_ros
+  tue_config
   tue_filesystem
   tue_msgs
 )
@@ -22,7 +25,7 @@ find_package(Boost REQUIRED COMPONENTS filesystem)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ed_localization_pf ed_localization_odom ed_localization_laser ed_localization_plugin_base ed_localization_plugin ed_localization_tf_plugin
-  CATKIN_DEPENDS ed geometry_msgs rgbd sensor_msgs tf2 tf2_geometry_msgs tf2_ros tue_msgs
+  CATKIN_DEPENDS ed geolib2 geometry_msgs roscpp tf2_ros tue_config
   DEPENDS Boost
 )
 
@@ -34,17 +37,17 @@ include_directories(
 )
 
 add_library(ed_localization_pf
-  src/kdtree.cpp
   include/ed_localization/kdtree.h
-  src/particle_filter.cpp
   include/ed_localization/particle_filter.h
+  src/kdtree.cpp
+  src/particle_filter.cpp
 )
 target_compile_definitions(ed_localization_pf PRIVATE BOOST_FILESYSTEM_NO_DEPRECATED)
 target_link_libraries(ed_localization_pf ${catkin_LIBRARIES} ${Boost_LIBRARIES})
 
 add_library(ed_localization_odom
-  src/odom_model.cpp
   include/ed_localization/odom_model.h
+  src/odom_model.cpp
 )
 target_link_libraries(ed_localization_odom ed_localization_pf ${catkin_LIBRARIES})
 
@@ -55,8 +58,8 @@ add_library(ed_localization_laser
 target_link_libraries(ed_localization_laser ed_localization_pf ${catkin_LIBRARIES})
 
 add_library(ed_localization_plugin_base
-  src/localization_plugin_base.cpp
   include/ed_localization/localization_plugin_base.h
+  src/localization_plugin_base.cpp
 )
 target_link_libraries(ed_localization_plugin_base ed_localization_pf ed_localization_odom ${catkin_LIBRARIES})
 add_dependencies(ed_localization_plugin_base ${catkin_EXPORTED_TARGETS})
