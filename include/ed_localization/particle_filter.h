@@ -15,7 +15,7 @@ namespace ed_localization {
 
 struct Sample
 {
-    Sample(const geo::Transform2& t=geo::Transform2::identity(), const double& w=0) : weight(w), pose(t)
+    Sample(const geo::Transform2& t=geo::Transform2::identity(), double w=0) : weight(w), pose(t)
     {
     }
 
