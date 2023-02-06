@@ -509,8 +509,8 @@ bool ParticleFilter::loadCSV(const std::string& file_name)
     std::vector<Sample>& smpls = samples();
     smpls.clear();
     kd_tree_->clear();
-
-    while(getline(file, line))
+    std::getline(file, line); // read header
+    while(std::getline(file, line))
     {
         row.clear();
         std::stringstream str(line);
