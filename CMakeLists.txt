@@ -16,7 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS
   LIBRARIES ed_localization_pf ed_localization_odom ed_localization_laser ed_localization_plugin ed_localization_tf_plugin
-  CATKIN_DEPENDS ed geometry_msgs sensor_msgs tf2 tf2_geometry_msgs tf2_ros
+  CATKIN_DEPENDS ed geometry_msgs sensor_msgs tf2 tf2_geometry_msgs
   DEPENDS
 )
 

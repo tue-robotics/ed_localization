@@ -8,11 +8,9 @@
 
 #include <geometry_msgs/TransformStamped.h>
 
-#include <tf2_ros/transform_listener.h>
-
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationTFPlugin::LocalizationTFPlugin() : tf_buffer_(), tf_listener_(nullptr)
+LocalizationTFPlugin::LocalizationTFPlugin()
 {
 }
 
@@ -31,18 +29,11 @@ void LocalizationTFPlugin::configure(tue::Configuration config)
 
 // ----------------------------------------------------------------------------------------------------
 
-void LocalizationTFPlugin::initialize()
-{
-    tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_buffer_);
-}
-
-// ----------------------------------------------------------------------------------------------------
-
 void LocalizationTFPlugin::process(const ed::WorldModel& /*world*/, ed::UpdateRequest& req)
 {
     try
     {
-        geometry_msgs::TransformStamped ts = tf_buffer_.lookupTransform(robot_name_ + "/base_link", "map", ros::Time(0));
+        geometry_msgs::TransformStamped ts = tf_buffer_->lookupTransform(robot_name_ + "/base_link", "map", ros::Time(0));
 
         geo::Pose3D pose;
         geo::convert(ts.transform, pose);
