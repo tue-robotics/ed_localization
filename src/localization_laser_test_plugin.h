@@ -48,6 +48,7 @@ protected:
 
     // State
     bool laser_offset_initialized_;
+    bool visualize_;
 
     // Scan buffer
     sensor_msgs::LaserScanConstPtr scan_msg_;

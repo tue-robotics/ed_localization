@@ -42,7 +42,7 @@ std::tuple<int, int> pointToMatIndex(const geo::Vec2T<T>& p, const geo::Vec2T<T2
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationLaserTestPlugin::LocalizationLaserTestPlugin() : laser_offset_initialized_(false)
+LocalizationLaserTestPlugin::LocalizationLaserTestPlugin() : laser_offset_initialized_(false), visualize_(false)
 {
 }
 
@@ -59,6 +59,9 @@ void LocalizationLaserTestPlugin::configure(tue::Configuration config)
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_buffer_);
 
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>();
+
+    visualize_ = false;
+    config.value("visualize", visualize_, tue::config::OPTIONAL);
 
     config.value("resample_interval", resample_interval_);
 
@@ -230,7 +233,14 @@ TransformStatus LocalizationLaserTestPlugin::update(const sensor_msgs::LaserScan
 
     prob = laser_model_.getParticleProp(world, *scan, particle_pose_2d);
 
-    visualize(particle_pose_2d, prob);
+    if (visualize_)
+    {
+        visualize(particle_pose_2d, prob);
+    }
+    else
+    {
+        cv::destroyAllWindows();
+    }
 
     ROS_INFO_STREAM_NAMED("localization", "Pose: " << particle_pose << std::endl << "resulted in " << prob);
 
