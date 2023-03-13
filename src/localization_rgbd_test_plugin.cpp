@@ -35,7 +35,7 @@ using namespace ed_localization;
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationRGBDTestPlugin::LocalizationRGBDTestPlugin()
+LocalizationRGBDTestPlugin::LocalizationRGBDTestPlugin() : visualize_(false)
 {
 }
 
@@ -52,6 +52,9 @@ void LocalizationRGBDTestPlugin::configure(tue::Configuration config)
     tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_buffer_);
 
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>();
+
+    visualize_ = false;
+    config.value("visualize", visualize_, tue::config::OPTIONAL);
 
     config.value("resample_interval", resample_interval_);
 
@@ -252,21 +255,28 @@ TransformStatus LocalizationRGBDTestPlugin::update(const rgbd::ImageConstPtr& im
 
     prob = rgbd_model_.getParticleProp(depth_image, type_image, masked_image->rgbd_image->getDepthImage(), masked_image->mask->image, masked_image->labels);
 
-    cv::Size size = masked_image->rgbd_image->getRGBImage().size();
+    if (visualize_)
+    {
+        cv::Size size = masked_image->rgbd_image->getRGBImage().size();
 
-    cv::Mat canvas = cv::Mat(size.height, size.width * 2, CV_8UC1, UINT8_MAX);
+        cv::Mat canvas = cv::Mat(size.height, size.width * 2, CV_8UC1, UINT8_MAX);
 
-    cv::Mat sensor_roi = canvas(cv::Rect(cv::Point(0, 0), size));
-    cv::Mat wm_roi = canvas(cv::Rect(cv::Point(size.width, 0), size));
+        cv::Mat sensor_roi = canvas(cv::Rect(cv::Point(0, 0), size));
+        cv::Mat wm_roi = canvas(cv::Rect(cv::Point(size.width, 0), size));
 
-    cv::resize(30*masked_image->mask->image, sensor_roi, size);
-    cv::resize(30*type_image, wm_roi, size);
+        cv::resize(30*masked_image->mask->image, sensor_roi, size);
+        cv::resize(30*type_image, wm_roi, size);
 
-    cv::putText(canvas, std::to_string(prob), cv::Point(10, 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(255, 255, 255), 1);
+        cv::putText(canvas, std::to_string(prob), cv::Point(10, 20), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(255, 255, 255), 1);
 
-    cv::namedWindow("type_image");
-    cv::imshow("type_image", canvas);
-    cv::waitKey(1);
+        cv::namedWindow("type_image");
+        cv::imshow("type_image", canvas);
+        cv::waitKey(1);
+    }
+    else
+    {
+        cv::destroyAllWindows();
+    }
 
     ROS_INFO_STREAM_NAMED("localization", "Pose: " << particle_pose << std::endl << "resulted in " << prob);
 

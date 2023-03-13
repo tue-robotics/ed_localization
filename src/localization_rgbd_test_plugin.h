@@ -38,6 +38,8 @@ public:
 
 protected:
 
+    bool visualize_;
+
     double initial_pose_d_;
     double initial_pose_a_;
 
