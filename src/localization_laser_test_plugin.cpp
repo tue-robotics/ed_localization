@@ -26,8 +26,19 @@
 
 #include <future>
 #include <math.h>
+#include <tuple>
 
 using namespace ed_localization;
+
+// ----------------------------------------------------------------------------------------------------
+
+template<typename T, typename T2>
+std::tuple<int, int> pointToMatIndex(const geo::Vec2T<T>& p, const geo::Vec2T<T2>& center_point, double grid_resolution, int grid_size)
+{
+    int mx = -(p.y - center_point.y) / grid_resolution + grid_size / 2;
+    int my = -(p.x - center_point.x) / grid_resolution + grid_size / 2;
+    return std::tie<int, int>(mx, my);
+}
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -291,8 +302,8 @@ void LocalizationLaserTestPlugin::laserCallback(const sensor_msgs::LaserScanCons
 void LocalizationLaserTestPlugin::visualize(const geo::Transform2& pose, double prob)
 {
     ROS_DEBUG_NAMED("localization", "Visualize");
-    int grid_size = 800;
-    double grid_resolution = 0.025;
+    static int grid_size = 800;
+    static double grid_resolution = 0.025;
 
     cv::Mat rgb_image(grid_size, grid_size, CV_8UC3, cv::Scalar(10, 10, 10));
 
@@ -302,13 +313,13 @@ void LocalizationLaserTestPlugin::visualize(const geo::Transform2& pose, double 
     geo::Transform2 best_pose = pose; //(latest_map_odom_ * previous_odom_pose_).projectTo2d();
 
     geo::Transform2 laser_pose = best_pose * laser_model_.laser_offset();
+
     for(unsigned int i = 0; i < sensor_points.size(); ++i)
     {
-        const geo::Vec2& p = laser_pose * geo::Vec2(sensor_points[i].x, sensor_points[i].y);
-        int mx = -(p.y - best_pose.t.y) / grid_resolution + grid_size / 2;
-        int my = -(p.x - best_pose.t.x) / grid_resolution + grid_size / 2;
-
-        if (mx >= 0 && my >= 0 && mx < grid_size && my <grid_size)
+        int mx, my;
+        const geo::Vec2& p = laser_pose * sensor_points[i].projectTo2d();
+        std::tie<int, int>(mx, my) = pointToMatIndex(p, best_pose.t, grid_resolution, grid_size);
+        if (mx >= 0 && my >= 0 && mx < grid_size && my < grid_size)
         {
             rgb_image.at<cv::Vec3b>(my, mx) = cv::Vec3b(0, 255, 0);
         }
@@ -319,20 +330,16 @@ void LocalizationLaserTestPlugin::visualize(const geo::Transform2& pose, double 
 
     for(unsigned int i = 0; i < lines_start.size(); ++i)
     {
-        const geo::Vec2& p1 = lines_start[i];
-        int mx1 = -(p1.y - best_pose.t.y) / grid_resolution + grid_size / 2;
-        int my1 = -(p1.x - best_pose.t.x) / grid_resolution + grid_size / 2;
-
-        const geo::Vec2& p2 = lines_end[i];
-        int mx2 = -(p2.y - best_pose.t.y) / grid_resolution + grid_size / 2;
-        int my2 = -(p2.x - best_pose.t.x) / grid_resolution + grid_size / 2;
+        int mx1, my1, mx2, my2;
+        std::tie<int, int>(mx1, my1) = pointToMatIndex(lines_start[i], best_pose.t, grid_resolution, grid_size);
+        std::tie<int, int>(mx2, my2) = pointToMatIndex(lines_end[i], best_pose.t, grid_resolution, grid_size);
 
         cv::line(rgb_image, cv::Point(mx1, my1), cv::Point(mx2, my2), cv::Scalar(255, 255, 255), 1);
     }
 
     // Visualize sensor
-    int lmx = -(pose.t.y - best_pose.t.y) / grid_resolution + grid_size / 2;
-    int lmy = -(pose.t.x - best_pose.t.x) / grid_resolution + grid_size / 2;
+    int lmx, lmy;
+    std::tie<int, int>(lmx, lmy) = pointToMatIndex(pose.t, best_pose.t, grid_resolution, grid_size);
     cv::circle(rgb_image, cv::Point(lmx,lmy), 0.1 / grid_resolution, cv::Scalar(0, 0, 255), 1);
 
     geo::Vec2 d = pose.R * geo::Vec2(0.2, 0);
