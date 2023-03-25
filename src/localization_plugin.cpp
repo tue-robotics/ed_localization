@@ -588,7 +588,7 @@ void LocalizationPlugin::updateMapSize(const ed::WorldModel& world)
     {
         const ed::EntityConstPtr& e = *it;
 
-        const geo::ShapeConstPtr& shape = e->shape();
+        const geo::ShapeConstPtr& shape = e->visual();
 
         // Skip robot and entities without pose or shape
         if (!e->has_pose() || !shape || e->hasFlag("self") || shape->getBoundingBox().getMax().z < 0.05)
