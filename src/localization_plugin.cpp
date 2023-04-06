@@ -12,7 +12,6 @@
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <tf2_ros/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
 
 #include <tue/profiling/timer.h>
@@ -53,8 +52,6 @@ LocalizationPlugin::LocalizationPlugin() :
     update_(false),
     laser_offset_initialized_(false),
     last_map_size_revision_(0),
-    tf_buffer_(),
-    tf_listener_(nullptr),
     tf_broadcaster_(nullptr)
 {
 }
@@ -67,7 +64,7 @@ LocalizationPlugin::~LocalizationPlugin()
     // Get transform between map and odom frame
     try
     {
-        geometry_msgs::TransformStamped ts = tf_buffer_.lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0));
+        geometry_msgs::TransformStamped ts = tf_buffer_->lookupTransform(map_frame_id_, odom_frame_id_, ros::Time(0));
         tf2::Quaternion rotation_map_odom;
         tf2::convert(ts.transform.rotation, rotation_map_odom); // Returns a quaternion
 
@@ -87,8 +84,6 @@ LocalizationPlugin::~LocalizationPlugin()
 
 void LocalizationPlugin::configure(tue::Configuration config)
 {
-    tf_listener_ = std::make_unique<tf2_ros::TransformListener>(tf_buffer_);
-
     tf_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>();
 
     visualize_ = false;
@@ -201,7 +196,7 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
     q_map_odom.setRPY(0, 0, ros_param_position["yaw"]);
     homogtrans_map_odom.setRotation(q_map_odom);
 
-    if (!tf_buffer_.canTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
+    if (!tf_buffer_->canTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0), ros::Duration(1)))
     {
         std::string msg = "No transform between odom and base_link";
         ROS_ERROR_STREAM_NAMED("Localization", msg);
@@ -210,7 +205,7 @@ geo::Transform2 LocalizationPlugin::tryGetInitialPoseFromParamServer(const ros::
 
     try
     {
-        geometry_msgs::TransformStamped ts = tf_buffer_.lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0));
+        geometry_msgs::TransformStamped ts = tf_buffer_->lookupTransform(odom_frame_id_, base_link_frame_id_, ros::Time(0));
         tf2::Stamped<tf2::Transform> tf_odom_base_link;
         tf2::convert(ts, tf_odom_base_link);
         // Calculate base link position in map frame
@@ -513,7 +508,7 @@ TransformStatus LocalizationPlugin::transform(const std::string& target_frame, c
 {
     try
     {
-        geometry_msgs::TransformStamped ts = tf_buffer_.lookupTransform(target_frame, source_frame, time);
+        geometry_msgs::TransformStamped ts = tf_buffer_->lookupTransform(target_frame, source_frame, time);
         tf2::convert(ts, transform);
         return OK;
     }
@@ -523,7 +518,7 @@ TransformStatus LocalizationPlugin::transform(const std::string& target_frame, c
         {
             // Now we have to check if the error was an interpolation or extrapolation error
             // (i.e., the scan is too old or too new, respectively)
-            geometry_msgs::TransformStamped latest_transform = tf_buffer_.lookupTransform(target_frame, source_frame, ros::Time(0));
+            geometry_msgs::TransformStamped latest_transform = tf_buffer_->lookupTransform(target_frame, source_frame, ros::Time(0));
 
             if (scan_buffer_.front()->header.stamp > latest_transform.header.stamp)
             {

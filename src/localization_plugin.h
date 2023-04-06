@@ -19,7 +19,6 @@
 
 // TF2
 #include <tf2/transform_datatypes.h>
-#include <tf2_ros/buffer.h>
 
 // MODELS
 #include "particle_filter.h"
@@ -34,7 +33,6 @@ namespace tf2 {
 }
 
 namespace tf2_ros {
-    class TransformListener;
     class TransformBroadcaster;
 }
 
@@ -108,8 +106,6 @@ private:
 
     // TF2
     ros::Duration transform_tolerance_;
-    tf2_ros::Buffer tf_buffer_;
-    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
     // ROS

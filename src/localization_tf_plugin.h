@@ -6,13 +6,7 @@
 #include <geolib/datatypes.h>
 #include <geolib/sensors/LaserRangeFinder.h>
 
-#include <tf2_ros/buffer.h>
-
 #include <memory>
-
-namespace tf2_ros {
-    class TransformListener;
-}
 
 class LocalizationTFPlugin : public ed::Plugin
 {
@@ -32,8 +26,6 @@ public:
 private:
 
     std::string robot_name_;
-    tf2_ros::Buffer tf_buffer_;
-    std::unique_ptr<tf2_ros::TransformListener> tf_listener_;
 
 };
 
