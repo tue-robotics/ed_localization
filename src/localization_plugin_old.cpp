@@ -198,8 +198,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
     std::vector<ed::EntityConstPtr> entities;
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
-        // if (it->second->id() == "pico_case")
-        if (it->second->shape())
+        if (it->second->visual())
             entities.push_back(it->second);
     }
 
@@ -219,7 +218,7 @@ void LocalizationPlugin::process(const ed::WorldModel& world, ed::UpdateRequest&
 
         geo::LaserRangeFinder::RenderOptions options;
         geo::Transform t_inv = laser_pose.inverse() * e->pose();
-        options.setMesh(e->shape()->getMesh(), t_inv);
+        options.setMesh(e->visual()->getMesh(), t_inv);
         lrf_.render(options, render_result);
     }
 

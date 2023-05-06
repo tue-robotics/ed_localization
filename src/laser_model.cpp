@@ -261,7 +261,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
     {
         const ed::EntityConstPtr& e = *it;
-        if (e->shape() && e->has_pose())
+        if (e->visual() && e->has_pose())
         {
             // Do not render the robot itself (we're trying to localize it!)
             if (e->hasFlag("self"))
@@ -272,7 +272,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
 
             geo::LaserRangeFinder::RenderOptions options;
             geo::Transform t_inv = laser_pose.inverse() * e->pose();
-            options.setMesh(e->shape()->getMesh(), t_inv);
+            options.setMesh(e->visual()->getMesh(), t_inv);
             lrf_.render(options, render_result);
         }
     }
