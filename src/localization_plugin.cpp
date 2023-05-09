@@ -120,6 +120,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
     if (write_csv_)
     {
         std::string csv_file_name;
+        csv_file_name.append("laser-");
         csv_file_name.append(uint_to_string(loop_counter_, 4));
         csv_file_name.append("-");
         csv_file_name.append(uint_to_string(step_counter++,  2));
@@ -143,6 +144,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         if (write_csv_)
         {
             std::string csv_file_name;
+            csv_file_name.append("laser-");
             csv_file_name.append(uint_to_string(loop_counter_, 4));
             csv_file_name.append("-");
             csv_file_name.append(uint_to_string(step_counter++, 2));
@@ -161,6 +163,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         if (write_csv_)
         {
             std::string csv_file_name;
+            csv_file_name.append("laser-");
             csv_file_name.append(uint_to_string(loop_counter_, 4));
             csv_file_name.append("-");
             csv_file_name.append(uint_to_string(step_counter++, 2));
@@ -177,6 +180,7 @@ TransformStatus LocalizationPlugin::update(const sensor_msgs::LaserScanConstPtr&
         if (resampled && write_csv_)
         {
             std::string csv_file_name;
+            csv_file_name.append("laser-");
             csv_file_name.append(uint_to_string(loop_counter_, 4));
             csv_file_name.append("-");
             csv_file_name.append(uint_to_string(step_counter++, 2));
