@@ -160,6 +160,8 @@ RGBDModel::RGBDModel() : range_max_(10)
 {
     labels_.reserve(10);
     mapping_["dining table"] = "table";
+    mapping_["pavement"] = "floor";
+    mapping_["road"] = "floor";
     mapping_["rug"] = "floor";
 }
 
