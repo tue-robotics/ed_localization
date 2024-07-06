@@ -424,7 +424,7 @@ void LocalizationPlugin::initParticleFilterUniform(const geo::Transform2& pose)
 {
     const geo::Vec2& p = pose.getOrigin();
     const double yaw = pose.rotation();
-    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), yaw - 0.15, yaw + 0.15);
+    particle_filter_.initUniform(p - geo::Vec2(0.3, 0.3), p + geo::Vec2(0.3, 0.3), yaw - 0.3, yaw + 0.3);
     have_previous_odom_pose_ = false;
     resample_count_ = 0;
 }
