@@ -1,24 +1,26 @@
 #include "localization_tf_plugin.h"
 
-#include <ed/world_model.h>
-#include <ed/entity.h>
+#include <ed/plugin.h>
 #include <ed/update_request.h>
+#include <ed/world_model.h>
 
+#include <geolib/datatypes.h>
 #include <geolib/ros/msg_conversions.h>
 
-#include <geometry_msgs/TransformStamped.h>
+#include <rclcpp/logging.hpp>
+#include <tf2/exceptions.hpp>
+#include <tf2/time.hpp>
+#include <tue/config/configuration.h>
+
+#include <geometry_msgs/msg/transform_stamped.hpp>
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationTFPlugin::LocalizationTFPlugin()
-{
-}
+LocalizationTFPlugin::LocalizationTFPlugin() = default;
 
 // ----------------------------------------------------------------------------------------------------
 
-LocalizationTFPlugin::~LocalizationTFPlugin()
-{
-}
+LocalizationTFPlugin::~LocalizationTFPlugin() = default;
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -33,16 +35,17 @@ void LocalizationTFPlugin::process(const ed::WorldModel& /*world*/, ed::UpdateRe
 {
     try
     {
-        geometry_msgs::TransformStamped ts = tf_buffer_->lookupTransform(robot_name_ + "/base_link", "map", ros::Time(0));
+        geometry_msgs::msg::TransformStamped const ts =
+            tf_buffer_->lookupTransform(robot_name_ + "/base_link", "map", tf2::TimePointZero);
 
         geo::Pose3D pose;
         geo::convert(ts.transform, pose);
 
         req.setPose(robot_name_, pose.inverse());
     }
-    catch(tf2::TransformException& exc)
+    catch (const tf2::TransformException& exc)
     {
-        ROS_ERROR_STREAM("ED LocalizationTFPlugin: " << exc.what());
+        RCLCPP_ERROR_STREAM(node_->get_logger(), "ED LocalizationTFPlugin: " << exc.what());
     }
 }
 

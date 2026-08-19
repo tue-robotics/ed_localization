@@ -7,36 +7,32 @@
 #include <geolib/sensors/LaserRangeFinder.h>
 
 // ROS
-#include <ros/duration.h>
-#include <ros/subscriber.h>
-#include <ros/publisher.h>
-#include <ros/callback_queue.h>
-#include <sensor_msgs/LaserScan.h>
-#include <geometry_msgs/PoseWithCovarianceStamped.h>
+#include <rclcpp/rclcpp.hpp>
+
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <sensor_msgs/msg/laser_scan.hpp>
 
 // SCAN BUFFER
 #include <queue>
 
 // TF2
-#include <tf2/transform_datatypes.h>
+#include <tf2/transform_datatypes.hpp>
 
 // MODELS
-#include "particle_filter.h"
-#include "odom_model.h"
 #include "laser_model.h"
+#include "odom_model.h"
+#include "particle_filter.h"
 
+#include <filesystem>
 #include <functional>
 #include <memory>
 
-namespace tf2 {
-    class Transform;
-}
+namespace tf2 { class Transform; }
 
-namespace tf2_ros {
-    class TransformBroadcaster;
-}
+namespace tf2_ros { class TransformBroadcaster; }
 
-enum TransformStatus
+enum TransformStatus : uint8_t
 {
     TOO_RECENT,
     TOO_OLD,
@@ -48,19 +44,17 @@ class LocalizationPlugin : public ed::Plugin
 {
 
 public:
-
     LocalizationPlugin();
 
-    virtual ~LocalizationPlugin();
+    ~LocalizationPlugin() override;
 
-    void configure(tue::Configuration config);
+    void configure(tue::Configuration config) override;
 
-    void initialize();
+    void initialize() override;
 
-    void process(const ed::WorldModel& world, ed::UpdateRequest& req);
+    void process(const ed::WorldModel& world, ed::UpdateRequest& req) override;
 
 private:
-
     std::string robot_name_;
 
     // Config
@@ -95,60 +89,72 @@ private:
     unsigned long last_map_size_revision_;
 
     // Initial pose
-    geometry_msgs::PoseWithCovarianceStampedConstPtr initial_pose_msg_;
+    geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr initial_pose_msg_;
 
     // Scan buffer
-    std::queue<sensor_msgs::LaserScanConstPtr> scan_buffer_;
+    std::queue<sensor_msgs::msg::LaserScan::ConstSharedPtr> scan_buffer_;
 
     std::string map_frame_id_;
     std::string odom_frame_id_;
     std::string base_link_frame_id_;
 
+    // Persisted pose, recovered on the next run
+    std::filesystem::path initial_pose_file_;
+    rclcpp::Duration save_pose_interval_;
+    rclcpp::Time last_pose_save_;
+
     // TF2
-    ros::Duration transform_tolerance_;
+    rclcpp::Duration transform_tolerance_;
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
     // ROS
-    ros::CallbackQueue cb_queue_;
-    ros::Subscriber sub_laser_;
-    ros::Subscriber sub_initial_pose_;
-    ros::Publisher pub_particles_;
+    rclcpp::CallbackGroup::SharedPtr cb_group_;
+    rclcpp::executors::SingleThreadedExecutor executor_;
+    rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr sub_laser_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr sub_initial_pose_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pub_particles_;
 
     // Configuration
-    geo::Transform2 getInitialPose(const ros::NodeHandle& nh, tue::Configuration& config);
-    geo::Transform2 tryGetInitialPoseFromParamServer(const ros::NodeHandle& nh);
-    geo::Transform2 tryGetInitialPoseFromConfig(tue::Configuration& config);
+    geo::Transform2 getInitialPose(tue::Configuration& config);
+    geo::Transform2 tryGetInitialPoseFromParamServer();
+    geo::Transform2 tryGetInitialPoseFromFile();
+    static geo::Transform2 tryGetInitialPoseFromConfig(tue::Configuration& config);
+    void resolveInitialPoseFile(tue::Configuration& config);
+    void saveInitialPose();
 
     // Init
-    TransformStatus initLaserOffset(const std::string& frame_id, const ros::Time& stamp);
+    TransformStatus initLaserOffset(const std::string& frame_id, const rclcpp::Time& stamp);
 
     void initParticleFilterUniform(const geo::Transform2& pose);
 
     // Callbacks
-    void laserCallback(const sensor_msgs::LaserScanConstPtr& msg);
+    void laserCallback(const sensor_msgs::msg::LaserScan::ConstSharedPtr& msg);
 
-    void initialPoseCallback(const geometry_msgs::PoseWithCovarianceStampedConstPtr& msg);
+    void initialPoseCallback(const geometry_msgs::msg::PoseWithCovarianceStamped::ConstSharedPtr& msg);
 
     // random pose generation
-    geo::Transform2 generateRandomPose(std::function<void()> update_map_size);
+    geo::Transform2 generateRandomPose(const std::function<void()>& update_map_size);
 
     void updateMapSize(const ed::WorldModel& world);
 
-    TransformStatus update(const sensor_msgs::LaserScanConstPtr& laser_msg_, const ed::WorldModel& world, ed::UpdateRequest& req);
+    TransformStatus update(const sensor_msgs::msg::LaserScan::ConstSharedPtr& scan,
+                           const ed::WorldModel& world,
+                           ed::UpdateRequest& req);
 
     bool resample(const ed::WorldModel& world);
 
-    void publishParticles(const ros::Time& stamp);
+    void publishParticles(const rclcpp::Time& stamp);
 
     void updateMapOdom(const geo::Pose3D& odom_to_base_link);
 
-    void publishMapOdom(const ros::Time &stamp);
+    void publishMapOdom(const rclcpp::Time& stamp);
 
-    TransformStatus transform(const std::string& target_frame, const std::string& source_frame,
-                              const ros::Time& time, tf2::Stamped<tf2::Transform>& transform);
+    TransformStatus transform(const std::string& target_frame,
+                              const std::string& source_frame,
+                              const rclcpp::Time& time,
+                              tf2::Stamped<tf2::Transform>& transform);
 
     void visualize();
-
 };
 
 #endif

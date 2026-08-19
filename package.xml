@@ -7,32 +7,38 @@
   <version>0.0.0</version>
   <description>No description available</description>
 
-  <author>Sjoerd van den Dries</author>
-
   <maintainer email="MatthijsBurgh@outlook.com">Matthijs van der Burgh</maintainer>
 
   <license>BSD-2-Clause</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <author>Sjoerd van den Dries</author>
 
-  <build_depend>ed</build_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>tf2</build_depend>
-  <build_depend>tf2_geometry_msgs</build_depend>
-  <build_depend>tf2_ros</build_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <exec_depend>ed</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>tf2</exec_depend>
-  <exec_depend>tf2_geometry_msgs</exec_depend>
-  <exec_depend>tf2_ros</exec_depend>
+  <depend>ed</depend>
+  <depend>geolib2</depend>
+  <depend>geometry_msgs</depend>
+  <depend>libopencv-dev</depend>
+  <depend>pluginlib</depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>tue_config</depend>
+
+  <test_depend>ament_cmake_clang_format</test_depend>
+  <test_depend>ament_cmake_clang_tidy</test_depend>
+  <test_depend>ament_cmake_lint_cmake</test_depend>
+  <test_depend>ament_cmake_xmllint</test_depend>
+  <test_depend>clang-format-21</test_depend>
+  <test_depend>clang-tidy-21</test_depend>
+  <test_depend>tue_lint_config</test_depend>
 
   <doc_depend>doxygen</doc_depend>
 
   <export>
-    <ed plugin="${prefix}/plugins.xml" />
+    <build_type>ament_cmake</build_type>
     <rosdoc config="rosdoc.yaml" />
   </export>
 

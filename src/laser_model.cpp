@@ -1,33 +1,57 @@
 #include "laser_model.h"
 
 #include "particle_filter.h"
-#include <ed/world_model.h>
-#include <ed/entity.h>
-#include <geolib/Shape.h>
 
-#include <tue/profiling/timer.h>
+#include <ed/entity.h>
+#include <ed/world_model.h>
+
+#include <geolib/datatypes.h>
+#include <geolib/math_types.h>
+#include <geolib/sensors/LaserRangeFinder.h>
+// geo::Shape must be complete for e->visual()->getMesh(); include-cleaner does not see this.
+#include <geolib/Shape.h> // IWYU pragma: keep
+
+#include <tue/config/configuration.h>
+
+#include <sensor_msgs/msg/laser_scan.hpp>
+
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <numbers>
+#include <vector>
 
 // ----------------------------------------------------------------------------------------------------
 
-class LineRenderResult : public geo::LaserRangeFinder::RenderResult
+//! geo::LaserRangeFinder::RenderResult reads ranges.size() in its constructor, so the vector handed to
+//! it must already be constructed. Base classes are initialized before members, so holding it in a base
+//! of its own is the only way to get the ordering right - the ROS 1 code passed a member and read it
+//! uninitialized.
+struct DummyRanges
+{
+    std::vector<double> ranges_;
+};
+
+class LineRenderResult final : public DummyRanges, public geo::LaserRangeFinder::RenderResult
 {
 
 public:
+    LineRenderResult(std::vector<geo::Vec2>& lines_start, std::vector<geo::Vec2>& lines_end, double max_distance) :
+        geo::LaserRangeFinder::RenderResult(ranges_), lines_start_(lines_start), lines_end_(lines_end),
+        max_distance_sq_(max_distance * max_distance)
+    {
+    }
 
-    LineRenderResult(std::vector<geo::Vec2>& lines_start, std::vector<geo::Vec2>& lines_end, double max_distance)
-        : geo::LaserRangeFinder::RenderResult(dummy_ranges_),
-          lines_start_(lines_start), lines_end_(lines_end), max_distance_sq_(max_distance * max_distance) {}
-
-    void renderLine(const geo::Vec2& p1, const geo::Vec2& p2)
+    void renderLine(const geo::Vec2& p1, const geo::Vec2& p2) override
     {
         // Calculate distance to the line
 
-        geo::Vec2 diff = p2 - p1;
-        double line_length_sq = diff.length2();
+        geo::Vec2 const diff = p2 - p1;
+        double const line_length_sq = diff.length2();
 
-        double t = p1.dot(diff) / -line_length_sq;
+        double const t = p1.dot(diff) / -line_length_sq;
 
-        double distance_sq;
+        double distance_sq = NAN;
 
         if (t < 0)
             distance_sq = p1.length2();
@@ -45,36 +69,26 @@ public:
     }
 
 private:
-
-    std::vector<double> dummy_ranges_;
+    // Render output is accumulated straight into the caller's vectors; the result object never
+    // outlives the render call.
+    // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::vector<geo::Vec2>& lines_start_;
     std::vector<geo::Vec2>& lines_end_;
+    // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
     double max_distance_sq_;
-
 };
 
 // ----------------------------------------------------------------------------------------------------
 
-LaserModel::LaserModel()
+LaserModel::LaserModel() :
+    z_hit(0.95), sigma_hit(0.2), z_short(0.1), z_max(0.05), z_rand(0.05), lambda_short(0.1), range_max(10), // m
+    laser_height_(0.3), laser_offset_(0.3, 0, 0)
 {
-    // DEFAULT:
-    z_hit = 0.95;
-    sigma_hit = 0.2;
-    z_short = 0.1;
-    z_max = 0.05;
-    z_rand = 0.05;
-    lambda_short = 0.1;
-    range_max = 10;      // m
-
-    laser_height_ = 0.3;
-    laser_offset_ = geo::Transform2(0.3, 0, 0);
 }
 
 // ----------------------------------------------------------------------------------------------------
 
-LaserModel::~LaserModel()
-{
-}
+LaserModel::~LaserModel() = default;
 
 // ----------------------------------------------------------------------------------------------------
 
@@ -95,26 +109,26 @@ void LaserModel::configure(tue::Configuration config)
     config.value("min_particle_rotation_distance", min_particle_rotation_distance_);
 
     // Pre-calculate expensive operations
-    int resolution = 1000; // mm accuracy
+    int const resolution = 1000; // mm accuracy
 
-    exp_hit_.resize(range_max * resolution + 1);
-    for(unsigned int i = 0; i < exp_hit_.size(); ++i)
+    exp_hit_.resize(static_cast<std::size_t>((range_max * resolution) + 1));
+    for (unsigned int i = 0; i < exp_hit_.size(); ++i)
     {
-        double z = static_cast<double>(i) / resolution;
+        double const z = static_cast<double>(i) / resolution;
         exp_hit_[i] = exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
     }
 
-    exp_short_.resize(range_max * resolution + 1);
-    for(unsigned int i = 0; i < exp_hit_.size(); ++i)
+    exp_short_.resize(static_cast<std::size_t>((range_max * resolution) + 1));
+    for (unsigned int i = 0; i < exp_hit_.size(); ++i)
     {
-        double obs_range = static_cast<double>(i) / resolution;
+        double const obs_range = static_cast<double>(i) / resolution;
         exp_short_[i] = exp(-this->lambda_short * obs_range);
     }
 }
 
 // ----------------------------------------------------------------------------------------------------
 
-void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::LaserScan& scan, ParticleFilter& pf)
+void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::msg::LaserScan& scan, ParticleFilter& pf)
 {
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Find unique samples
@@ -131,22 +145,22 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     // mapping of samples from the particle filter to the unique sample list
     std::vector<unsigned int> sample_to_unique(pf.samples().size());
 
-    double min_particle_distance_sq = min_particle_distance_ * min_particle_distance_;
+    double const min_particle_distance_sq = min_particle_distance_ * min_particle_distance_;
 
-    for(unsigned int i = 0; i < pf.samples().size(); ++i)
+    for (unsigned int i = 0; i < pf.samples().size(); ++i)
     {
         const Sample& s1 = pf.samples()[i];
         const geo::Transform2& t1 = s1.pose;
 
         bool found = false;
-        for(unsigned int j = 0; j < unique_samples.size(); ++j)
+        for (unsigned int j = 0; j < unique_samples.size(); ++j)
         {
             const geo::Transform2& t2 = unique_samples[j];
 
             // Calculate difference in rotation
             double rot_diff = std::abs(t1.rotation() - t2.rotation());
-            if (rot_diff > M_PI)
-                rot_diff = 2 * M_PI - rot_diff;
+            if (rot_diff > std::numbers::pi)
+                rot_diff = (2 * std::numbers::pi) - rot_diff;
 
             // Check if translation and rotational difference are within boundaries
             if ((t1.t - t2.t).length2() < min_particle_distance_sq && rot_diff < min_particle_rotation_distance_)
@@ -176,9 +190,9 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     if (num_beams <= 0)
         num_beams = scan.ranges.size();
     else
-        num_beams = std::min<uint>(scan.ranges.size(), num_beams);
+        num_beams = std::min<unsigned int>(scan.ranges.size(), num_beams);
 
-    uint i_step = scan.ranges.size() / num_beams;
+    unsigned int const i_step = scan.ranges.size() / num_beams;
     sensor_ranges_.clear();
     for (unsigned int i = 0; i < scan.ranges.size(); i += i_step)
     {
@@ -200,7 +214,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
 
     // If the laser is upside down, we need to mirror the sensor data
     if (laser_upside_down_)
-        std::reverse(sensor_ranges_.begin(), sensor_ranges_.end());
+        std::ranges::reverse(sensor_ranges_);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // -     Determine center and maximum range of world model cross section
@@ -212,22 +226,19 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
 
     geo::Vec2 sample_min(1e9, 1e9);
     geo::Vec2 sample_max(-1e9, -1e9);
-    for(std::vector<Sample>::iterator it = pf.samples().begin(); it != pf.samples().end(); ++it)
+    for (auto& sample : pf.samples())
     {
-        Sample& sample = *it;
-
-        geo::Transform2 laser_pose = sample.pose * laser_offset_;
+        geo::Transform2 const laser_pose = sample.pose * laser_offset_;
 
         sample_min.x = std::min(sample_min.x, laser_pose.t.x);
         sample_min.y = std::min(sample_min.y, laser_pose.t.y);
-        sample_max.x = std::max(sample_min.x, laser_pose.t.x);
-        sample_max.y = std::max(sample_min.y, laser_pose.t.y);
+        sample_max.x = std::max(sample_max.x, laser_pose.t.x);
+        sample_max.y = std::max(sample_max.y, laser_pose.t.y);
     }
 
     double temp_range_max = 0;
-    for(unsigned int i = 0; i < sensor_ranges_.size(); ++i)
+    for (double const r : sensor_ranges_)
     {
-        double r = sensor_ranges_[i];
         if (r < range_max)
             temp_range_max = std::max(temp_range_max, r);
     }
@@ -237,8 +248,8 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     temp_range_max += lambda_short;
 
     // Calculate the sample boundary center and boundary render distance
-    geo::Vec2 sample_center = (sample_min + sample_max) / 2;
-    double max_distance = (sample_max - sample_min).length() / 2 + temp_range_max;
+    geo::Vec2 const sample_center = (sample_min + sample_max) / 2;
+    double const max_distance = ((sample_max - sample_min).length() / 2) + temp_range_max;
 
     // Set the range limit to the lrf renderer. This will make sure all shapes that
     // are too far away will not be rendered (object selection, not line selection)
@@ -248,7 +259,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     // -     Create world model cross section
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    geo::Pose3D laser_pose(sample_center.x, sample_center.y, laser_height_);
+    geo::Pose3D const laser_pose(sample_center.x, sample_center.y, laser_height_);
 
     lines_start_.clear();
     lines_end_.clear();
@@ -258,10 +269,9 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     // object selection that is done by the lrf renderer.
     LineRenderResult render_result(lines_start_, lines_end_, max_distance);
 
-    for(ed::WorldModel::const_iterator it = world.begin(); it != world.end(); ++it)
+    for (const auto& e : world)
     {
-        const ed::EntityConstPtr& e = *it;
-        if (e->visual() && e->has_pose())
+        if (e->visual() && e->hasPose())
         {
             // Do not render the robot itself (we're trying to localize it!)
             if (e->hasFlag("self"))
@@ -271,13 +281,13 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
                 continue;
 
             geo::LaserRangeFinder::RenderOptions options;
-            geo::Transform t_inv = laser_pose.inverse() * e->pose();
+            geo::Transform const t_inv = laser_pose.inverse() * e->pose();
             options.setMesh(e->visual()->getMesh(), t_inv);
             lrf_.render(options, render_result);
         }
     }
 
-    for(unsigned int i = 0; i < lines_start_.size(); ++i)
+    for (unsigned int i = 0; i < lines_start_.size(); ++i)
     {
         lines_start_[i] += sample_center;
         lines_end_[i] += sample_center;
@@ -290,22 +300,22 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     lrf_.setRangeLimits(scan.range_min, temp_range_max);
 
     std::vector<double> weight_updates(unique_samples.size());
-    for(unsigned int j = 0; j < unique_samples.size(); ++j)
+    for (unsigned int j = 0; j < unique_samples.size(); ++j)
     {
-        geo::Transform2 laser_pose = unique_samples[j] * laser_offset_;
-        geo::Transform2 pose_inv = laser_pose.inverse();
+        geo::Transform2 const laser_pose = unique_samples[j] * laser_offset_;
+        geo::Transform2 const pose_inv = laser_pose.inverse();
 
         // Calculate sensor model for this pose
         std::vector<double> model_ranges(sensor_ranges_.size(), 0);
 
-        for(unsigned int i = 0; i < lines_start_.size(); ++i)
+        for (unsigned int i = 0; i < lines_start_.size(); ++i)
         {
             const geo::Vec2& p1 = lines_start_[i];
             const geo::Vec2& p2 = lines_end_[i];
 
             // Transform the points to the laser pose
-            geo::Vec2 p1_t = pose_inv * p1;
-            geo::Vec2 p2_t = pose_inv * p2;
+            geo::Vec2 const p1_t = pose_inv * p1;
+            geo::Vec2 const p2_t = pose_inv * p2;
 
             // Render the line as if seen by the sensor
             lrf_.renderLine(p1_t, p2_t, model_ranges);
@@ -313,30 +323,31 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
 
         double p = 1;
 
-        for(unsigned int i = 0; i < sensor_ranges_.size(); ++i)
+        for (unsigned int i = 0; i < sensor_ranges_.size(); ++i)
         {
-            double obs_range = sensor_ranges_[i];
-            double map_range = model_ranges[i];
+            double const obs_range = sensor_ranges_[i];
+            double const map_range = model_ranges[i];
 
-            double z = obs_range - map_range;
+            double const z = obs_range - map_range;
 
             double pz = 0;
 
             // Part 1: good, but noisy, hit
             //            pz += this->z_hit * exp(-(z * z) / (2 * this->sigma_hit * this->sigma_hit));
-            pz += this->z_hit * exp_hit_[std::min(std::abs(z), range_max) * 1000];
+            pz += this->z_hit * exp_hit_[static_cast<std::size_t>(std::min(std::abs(z), range_max) * 1000)];
 
             // Part 2: short reading from unexpected obstacle (e.g., a person)
-            if(z < 0)
+            if (z < 0)
                 //                pz += this->z_short * this->lambda_short * exp(-this->lambda_short*obs_range);
-                pz += this->z_short * this->lambda_short * exp_short_[std::min(obs_range, range_max) * 1000];
+                pz += this->z_short * this->lambda_short *
+                      exp_short_[static_cast<std::size_t>(std::min(obs_range, range_max) * 1000)];
 
             // Part 3: Failure to detect obstacle, reported as max-range
-            if(obs_range >= this->range_max)
+            if (obs_range >= this->range_max)
                 pz += this->z_max * 1.0;
 
             // Part 4: Random measurements
-            if(obs_range < this->range_max)
+            if (obs_range < this->range_max)
                 pz += this->z_rand * 1.0 / this->range_max;
 
             // here we have an ad-hoc weighting scheme for combining beam probs
@@ -351,7 +362,7 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
     // -     Update the particle filter
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-    for(unsigned int j = 0; j < pf.samples().size(); ++j)
+    for (unsigned int j = 0; j < pf.samples().size(); ++j)
     {
         Sample& sample = pf.samples()[j];
         sample.weight *= weight_updates[sample_to_unique[j]];
@@ -359,5 +370,3 @@ void LaserModel::updateWeights(const ed::WorldModel& world, const sensor_msgs::L
 
     pf.normalize(true);
 }
-
-

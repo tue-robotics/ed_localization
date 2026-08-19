@@ -13,9 +13,7 @@
 
 struct Sample
 {
-    Sample(const geo::Transform2& t=geo::Transform2::identity(), const double& w=0) : weight(w), pose(t)
-    {
-    }
+    Sample(const geo::Transform2& t = geo::Transform2::identity(), const double& w = 0) : weight(w), pose(t) {}
 
     double weight;
     geo::Transform2 pose;
@@ -25,7 +23,7 @@ struct Sample
 
 struct Cluster
 {
-    Cluster() : count(0), weight(0), mean(geo::Transform2::identity()), cov(0.f), m({0, 0, 0, 0}), c({ {{0, 0}, {0, 0}} })
+    Cluster() : count(0), weight(0), mean(geo::Transform2::identity()), cov(0.f), m({0, 0, 0, 0}), c({{{0, 0}, {0, 0}}})
     {
     }
 
@@ -50,7 +48,6 @@ class ParticleFilter
 {
 
 public:
-
     ParticleFilter();
 
     ~ParticleFilter();
@@ -59,9 +56,9 @@ public:
 
     void initUniform(const geo::Vec2& min, const geo::Vec2& max, double a_min, double a_max);
 
-    void resample(std::function<geo::Transform2()> gen_random_pose_function);
+    void resample(const std::function<geo::Transform2()>& gen_random_pose_function);
 
-    unsigned int resampleLimit(unsigned int number_bins);
+    unsigned int resampleLimit(unsigned int k);
 
     std::vector<Sample>& samples() { return samples_[i_current_]; }
 
@@ -73,10 +70,9 @@ public:
 
     geo::Transform2 calculateMeanPose() const;
 
-    void normalize(bool update_filter=false);
+    void normalize(bool update_filter = false);
 
 private:
-
     unsigned int min_samples_, max_samples_;
     double kld_err_, kld_z_;
     double alpha_slow_, alpha_fast_;
@@ -91,7 +87,7 @@ private:
 
     std::unique_ptr<KDTree> kd_tree_;
 
-    mutable std::vector <Cluster> cluster_cache_;
+    mutable std::vector<Cluster> cluster_cache_;
     mutable geo::Transform2 mean_cache_;
     mutable geo::Mat3 cov_cache_;
 
@@ -104,7 +100,6 @@ private:
     void switchSamples();
 
     void setUniformWeights();
-
 };
 
 #endif
