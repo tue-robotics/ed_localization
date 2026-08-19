@@ -11,23 +11,20 @@ class OdomModel
 {
 
 public:
-
     OdomModel();
 
-    ~OdomModel();
+    ~OdomModel() = default;
 
     void configure(tue::Configuration config);
 
-    void updatePoses(const geo::Transform2& movement, ParticleFilter& pf);
+    void updatePoses(const geo::Transform2& movement, ParticleFilter& pf) const;
 
 private:
-
     double alpha1_;
     double alpha2_;
     double alpha3_;
     double alpha4_;
     double alpha5_;
-
 };
 
 #endif

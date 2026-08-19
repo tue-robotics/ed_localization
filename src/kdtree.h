@@ -9,7 +9,9 @@
 
 struct KDTreeNode
 {
-    KDTreeNode() : depth(0), leaf(true), pivot_dim(0), pivot_value(0), key({0,0,0}), value(0), cluster(-1), children({nullptr, nullptr})
+    KDTreeNode() :
+        depth(0), leaf(true), pivot_dim(0), pivot_value(0), key({0, 0, 0}), value(0), cluster(-1),
+        children({nullptr, nullptr})
     {
     }
 
@@ -33,14 +35,13 @@ struct KDTreeNode
     int cluster;
 
     // Child nodes
-   std::array<KDTreeNode*, 2> children;
+    std::array<KDTreeNode*, 2> children;
 };
 
 class KDTree
 {
 
 public:
-
     KDTree(unsigned int initial_size, const std::array<double, 3>& cell_size);
 
     ~KDTree();
@@ -83,7 +84,6 @@ public:
     unsigned int getLeafCount() { return leaf_count_; }
 
 private:
-
     /**
      * @brief Generate the key from a pose taking into account the #cell_size
      * @param pose pose to convert to a key
@@ -97,7 +97,7 @@ private:
      * @param key_b
      * @return
      */
-    bool equal(const std::array<int, 3>& key_a, const std::array<int, 3>& key_b);
+    static bool equal(const std::array<int, 3>& key_a, const std::array<int, 3>& key_b);
 
     /**
      * @brief Insert a node into the tree

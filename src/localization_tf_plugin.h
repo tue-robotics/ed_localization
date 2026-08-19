@@ -12,21 +12,16 @@ class LocalizationTFPlugin : public ed::Plugin
 {
 
 public:
-
     LocalizationTFPlugin();
 
-    virtual ~LocalizationTFPlugin();
+    ~LocalizationTFPlugin() override;
 
-    void configure(tue::Configuration config);
+    void configure(tue::Configuration config) override;
 
-    void initialize();
-
-    void process(const ed::WorldModel& world, ed::UpdateRequest& req);
+    void process(const ed::WorldModel& world, ed::UpdateRequest& req) override;
 
 private:
-
     std::string robot_name_;
-
 };
 
 #endif

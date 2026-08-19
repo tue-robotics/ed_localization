@@ -1,11 +1,15 @@
 #include "kdtree.h"
 
+#include <geolib/math_types.h>
+
+#include <array>
 #include <cmath>
+#include <vector>
 
 // ----------------------------------------------------------------------------------------------------
 
-
-KDTree::KDTree(unsigned int initial_size, const std::array<double, 3>& cell_size) : res_(cell_size), root_(nullptr), node_count_(0), nodes_(initial_size), leaf_count_(0)
+KDTree::KDTree(unsigned int initial_size, const std::array<double, 3>& cell_size) :
+    res_(cell_size), root_(nullptr), node_count_(0), nodes_(initial_size), leaf_count_(0)
 {
 }
 
@@ -13,7 +17,7 @@ KDTree::KDTree(unsigned int initial_size, const std::array<double, 3>& cell_size
 
 KDTree::~KDTree()
 {
-    for (auto ptr : nodes_)
+    for (auto* ptr : nodes_)
         delete ptr;
 }
 
@@ -43,7 +47,7 @@ void KDTree::cluster()
     std::vector<KDTreeNode*> queue(node_count_);
 
     // Put all the leaves in a queue
-    for (uint i=0; i<node_count_; ++i)
+    for (unsigned int i = 0; i < node_count_; ++i)
     {
         KDTreeNode* node = nodes_[i];
         if (node->leaf)
@@ -53,16 +57,16 @@ void KDTree::cluster()
         }
     }
 
-    for (uint i=queue_count; i>0; --i)
+    for (unsigned int i = queue_count; i > 0; --i)
     {
-        KDTreeNode* node = queue[i-1];
+        KDTreeNode* node = queue[i - 1];
 
         // If this node has already been labelled, skip it
         if (node->cluster >= 0)
             continue;
 
         // Assign a label to this cluster
-        node->cluster = cluster_count++;
+        node->cluster = static_cast<int>(cluster_count++);
 
         // Recursively label nodes in this cluster
         clusterNode(node, 0);
@@ -73,7 +77,7 @@ void KDTree::cluster()
 
 int KDTree::getCluster(const geo::Transform2& pose)
 {
-    KDTreeNode* node = findNode(root_, generateKey(pose));
+    KDTreeNode const* node = findNode(root_, generateKey(pose));
     if (!node)
         return -1;
     return node->cluster;
@@ -83,7 +87,7 @@ int KDTree::getCluster(const geo::Transform2& pose)
 
 double KDTree::getValue(const geo::Transform2& pose)
 {
-    KDTreeNode* node = findNode(root_, generateKey(pose));
+    KDTreeNode const* node = findNode(root_, generateKey(pose));
     if (!node)
         return 0;
     return node->value;
@@ -91,9 +95,9 @@ double KDTree::getValue(const geo::Transform2& pose)
 
 // ----------------------------------------------------------------------------------------------------
 
-std::array<int, 3> KDTree::generateKey(const geo::Transform2 &pose)
+std::array<int, 3> KDTree::generateKey(const geo::Transform2& pose)
 {
-    std::array<int, 3> key;
+    std::array<int, 3> key{};
     key[0] = std::floor(pose.t.x / res_[0]);
     key[1] = std::floor(pose.t.y / res_[1]);
     key[2] = std::floor(pose.rotation() / res_[2]);
@@ -106,17 +110,19 @@ std::array<int, 3> KDTree::generateKey(const geo::Transform2 &pose)
 bool KDTree::equal(const std::array<int, 3>& key_a, const std::array<int, 3>& key_b)
 {
     if (key_a[0] != key_b[0])
-      return false;
+        return false;
     if (key_a[1] != key_b[1])
-      return false;
+        return false;
     if (key_a[2] != key_b[2])
-      return false;
+        return false;
 
     return true;
 }
 
 // ----------------------------------------------------------------------------------------------------
 
+// Recursion mirrors the tree structure and is bounded by its depth.
+// NOLINTNEXTLINE(misc-no-recursion)
 KDTreeNode* KDTree::insertNode(const KDTreeNode* parent, KDTreeNode* node, const std::array<int, 3>& key, double value)
 {
     // If the node doesnt exist yet
@@ -126,9 +132,8 @@ KDTreeNode* KDTree::insertNode(const KDTreeNode* parent, KDTreeNode* node, const
         if (node_count_ >= nodes_.size())
             nodes_.resize(node_count_ + 10);
 
-
         if (nodes_[node_count_])
-            nodes_[node_count_] = new(nodes_[node_count_]) KDTreeNode;
+            nodes_[node_count_] = new (nodes_[node_count_]) KDTreeNode;
         else
             nodes_[node_count_] = new KDTreeNode;
         node = nodes_[node_count_++];
@@ -163,16 +168,16 @@ KDTreeNode* KDTree::insertNode(const KDTreeNode* parent, KDTreeNode* node, const
 
             if (key[node->pivot_dim] < node->pivot_value)
             {
-              node->children[0] = insertNode(node, nullptr, key, value);
-              node->children[1] = insertNode(node, nullptr, node->key, node->value);
+                node->children[0] = insertNode(node, nullptr, key, value);
+                node->children[1] = insertNode(node, nullptr, node->key, node->value);
             }
             else
             {
-              node->children[0] = insertNode(node, nullptr, node->key, node->value);
-              node->children[1] = insertNode(node, nullptr, key, value);
+                node->children[0] = insertNode(node, nullptr, node->key, node->value);
+                node->children[1] = insertNode(node, nullptr, key, value);
             }
 
-            node->leaf = 0;
+            node->leaf = false;
             leaf_count_ -= 1;
         }
     }
@@ -191,6 +196,8 @@ KDTreeNode* KDTree::insertNode(const KDTreeNode* parent, KDTreeNode* node, const
 
 // ----------------------------------------------------------------------------------------------------
 
+// Recursion mirrors the tree structure and is bounded by its depth.
+// NOLINTNEXTLINE(misc-no-recursion)
 KDTreeNode* KDTree::findNode(KDTreeNode* node, const std::array<int, 3>& key)
 {
     if (node->leaf)
@@ -198,26 +205,24 @@ KDTreeNode* KDTree::findNode(KDTreeNode* node, const std::array<int, 3>& key)
         // If the keys are the same
         if (equal(key, node->key))
             return node;
-        else
-            return nullptr;
+        return nullptr;
     }
-    else
-    {
-        // If the keys are different
-        if (key[node->pivot_dim] < node->pivot_value)
-            return findNode(node->children[0], key);
-        else
-            return findNode(node->children[1], key);
-    }
+
+    // If the keys are different
+    if (key[node->pivot_dim] < node->pivot_value)
+        return findNode(node->children[0], key);
+    return findNode(node->children[1], key);
 }
 
 // ----------------------------------------------------------------------------------------------------
 
+// Recursion mirrors the tree structure and is bounded by its depth.
+// NOLINTNEXTLINE(misc-no-recursion)
 void KDTree::clusterNode(const KDTreeNode* node, int depth)
 {
-    std::array<int, 3> nkey;
-    KDTreeNode* nnode;
-    for (uint i=0; i<27; ++i) // all surrounding bins, including yourself
+    std::array<int, 3> nkey{};
+    KDTreeNode* nnode = nullptr;
+    for (int i = 0; i < 27; ++i) // all surrounding bins, including yourself
     {
         nkey[0] = node->key[0] + (i / 9) - 1;
         nkey[1] = node->key[1] + ((i % 9) / 3) - 1;

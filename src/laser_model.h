@@ -6,7 +6,7 @@
 
 #include <tue/config/configuration.h>
 
-#include <sensor_msgs/LaserScan.h>
+#include <sensor_msgs/msg/laser_scan.hpp>
 
 class ParticleFilter;
 
@@ -14,14 +14,13 @@ class LaserModel
 {
 
 public:
-
     LaserModel();
 
     ~LaserModel();
 
     void configure(tue::Configuration config);
 
-    void updateWeights(const ed::WorldModel& world, const sensor_msgs::LaserScan& scan, ParticleFilter& pf);
+    void updateWeights(const ed::WorldModel& world, const sensor_msgs::msg::LaserScan& scan, ParticleFilter& pf);
 
     const std::vector<geo::Vec2>& lines_start() const { return lines_start_; }
     const std::vector<geo::Vec2>& lines_end() const { return lines_end_; }
@@ -39,7 +38,6 @@ public:
     }
 
 private:
-
     double z_hit;
     double sigma_hit;
     double z_short;
@@ -50,12 +48,12 @@ private:
 
     double laser_height_;
     geo::Transform2 laser_offset_;
-    bool laser_upside_down_;
+    bool laser_upside_down_{};
 
-    uint num_beams;
+    unsigned int num_beams{};
 
-    double min_particle_distance_;
-    double min_particle_rotation_distance_;
+    double min_particle_distance_{};
+    double min_particle_rotation_distance_{};
 
     // CACHING
     std::vector<double> exp_hit_;
@@ -68,7 +66,6 @@ private:
     std::vector<geo::Vec2> lines_start_;
     std::vector<geo::Vec2> lines_end_;
     std::vector<double> sensor_ranges_;
-
 };
 
 #endif
